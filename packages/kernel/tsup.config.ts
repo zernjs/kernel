@@ -1,7 +1,8 @@
 import { defineConfig } from 'tsup';
+import { resolve } from 'node:path';
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: [resolve(__dirname, 'src/index.ts')],
   format: ['cjs', 'esm'],
   dts: {
     resolve: true,
@@ -11,7 +12,7 @@ export default defineConfig({
   clean: true,
   minify: false,
   target: 'es2022',
-  outDir: 'dist',
-  tsconfig: './tsconfig.build.json',
+  outDir: resolve(__dirname, 'dist'),
+  tsconfig: resolve(__dirname, './tooling/tsconfig.build.json'),
   external: ['@nestjs/common', '@nestjs/core', 'reflect-metadata', 'rxjs'],
 });
