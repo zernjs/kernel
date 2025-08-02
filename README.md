@@ -1,4 +1,6 @@
-# 🔥 Zern Kernel
+<h1 align="center">
+🔥 Zern Kernel
+</h1>
 
 <div align="center">
 
@@ -9,7 +11,7 @@
 
 **The pure plugin engine powering the Zern Framework**
 
-*Plugin Architecture • Type-safe • Extensible • Zero Dependencies*
+_Plugin Architecture • Type-safe • Extensible • Zero Dependencies_
 
 [Documentation](https://zern.dev/kernel) • [API Reference](https://zern.dev/kernel/api) • [Plugin Development](https://zern.dev/kernel/plugins) • [Contributing](CONTRIBUTING.md)
 
@@ -132,7 +134,7 @@ export class MyCustomPlugin implements Plugin {
   async init(kernel: ZernKernel): Promise<void> {
     // Plugin initialization logic
     console.log('Custom plugin initialized');
-    
+
     // Register with kernel's event system
     kernel.events.on('kernel.ready', () => {
       console.log('Kernel is ready!');
@@ -232,7 +234,7 @@ import { EventBus } from '@zern/kernel';
 const eventBus = new EventBus();
 
 // Subscribe to events
-eventBus.on('user.created', async (user) => {
+eventBus.on('user.created', async user => {
   await sendWelcomeEmail(user);
 });
 
@@ -240,7 +242,7 @@ eventBus.on('user.created', async (user) => {
 await eventBus.emit('user.created', { id: 1, email: 'user@example.com' });
 
 // Lifecycle hooks
-eventBus.on('plugin.beforeInit', (pluginId) => {
+eventBus.on('plugin.beforeInit', pluginId => {
   console.log(`Initializing plugin: ${pluginId}`);
 });
 ```
@@ -280,24 +282,24 @@ packages/
 
 ### Utility Plugins (Included)
 
-| Plugin | Description | Status |
-|--------|-------------|--------|
-| **@zern/kernel-logger** | Basic logging utilities for kernel operations | ✅ Stable |
-| **@zern/kernel-metrics** | Performance metrics and monitoring | ✅ Stable |
-| **@zern/kernel-devtools** | Development and debugging tools | ✅ Stable |
+| Plugin                    | Description                                   | Status    |
+| ------------------------- | --------------------------------------------- | --------- |
+| **@zern/kernel-logger**   | Basic logging utilities for kernel operations | ✅ Stable |
+| **@zern/kernel-metrics**  | Performance metrics and monitoring            | ✅ Stable |
+| **@zern/kernel-devtools** | Development and debugging tools               | ✅ Stable |
 
 ### Framework Core Plugins (Separate Repository)
 
 The following plugins are **NOT** part of the kernel but are built on top of it in the `zern` repository:
 
-| Plugin | Description | Repository |
-|--------|-------------|------------|
-| **HTTP Server** | Express/Fastify integration with routing | `zern` |
-| **Validation** | Zod-based validation with type inference | `zern` |
-| **Configuration** | Environment-aware config management | `zern` |
-| **Logging** | Structured logging with transports | `zern` |
-| **Testing** | Integrated testing framework | `zern` |
-| **Swagger** | Automatic OpenAPI documentation | `zern` |
+| Plugin            | Description                              | Repository |
+| ----------------- | ---------------------------------------- | ---------- |
+| **HTTP Server**   | Express/Fastify integration with routing | `zern`     |
+| **Validation**    | Zod-based validation with type inference | `zern`     |
+| **Configuration** | Environment-aware config management      | `zern`     |
+| **Logging**       | Structured logging with transports       | `zern`     |
+| **Testing**       | Integrated testing framework             | `zern`     |
+| **Swagger**       | Automatic OpenAPI documentation          | `zern`     |
 
 ### Plugin Development
 
@@ -353,7 +355,7 @@ Event Processing:        > 100,000 events/s
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - pnpm 8+
 - TypeScript 5+
 
