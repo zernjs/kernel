@@ -1,0 +1,68 @@
+{
+  "compilerOptions": {
+    // Base configuration
+    "baseUrl": ".",
+    "paths": {
+      "@zern/kernel": ["packages/kernel/src"],
+      "@zern/kernel/*": ["packages/kernel/src/*"],
+      "@zern/plugin-config": ["packages/plugins/core/config/src"],
+      "@zern/plugin-config/*": ["packages/plugins/core/config/src/*"],
+      "@zern/plugin-validation": ["packages/plugins/core/validation/src"],
+      "@zern/plugin-validation/*": ["packages/plugins/core/validation/src/*"],
+      "@zern/plugin-logger": ["packages/plugins/utilities/logger/src"],
+      "@zern/plugin-logger/*": ["packages/plugins/utilities/logger/src/*"],
+      "@zern/plugin-metrics": ["packages/plugins/utilities/metrics/src"],
+      "@zern/plugin-metrics/*": ["packages/plugins/utilities/metrics/src/*"],
+    },
+
+    // Module system
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+
+    // Interop and compatibility
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": false,
+
+    // Type checking
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitThis": true,
+    "noPropertyAccessFromIndexSignature": false,
+
+    // Emit
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "./dist",
+    "removeComments": false,
+    "importHelpers": true,
+
+    // Decorators (for NestJS)
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+
+    // Advanced
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+    "noEmitOnError": true,
+    "preserveConstEnums": true,
+
+    // Modern features
+    "useDefineForClassFields": true,
+    "allowImportingTsExtensions": false
+  },
+  "include": ["packages/*/src/**/*"],
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
+}
