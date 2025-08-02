@@ -4,7 +4,7 @@
   "private": true,
   "description": "Zern Kernel - A modern plugin system for NestJS applications",
   "version": "1.0.0",
-  "author": "BiteCraft",
+  "author": "ZernJS",
   "license": "MIT",
   "workspaces": [
     "packages/*"

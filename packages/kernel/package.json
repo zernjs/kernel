@@ -18,14 +18,16 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "npm run sync-version && tsup",
     "dev": "tsup --watch",
     "test": "vitest",
     "test:watch": "vitest --watch",
     "type-check": "tsc --noEmit",
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",
-    "lint:fix": "eslint src --ext .ts --fix"
+    "lint:fix": "eslint src --ext .ts --fix",
+    "sync-version": "node scripts/sync-version.js",
+    "prebuild": "npm run sync-version"
   },
   "keywords": [
     "plugins",
