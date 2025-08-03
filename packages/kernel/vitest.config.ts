@@ -5,24 +5,16 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: [
-      resolve(__dirname, './tests/**/*.test.ts'),
-      resolve(__dirname, './tests/**/*.spec.ts'),
-    ],
-    exclude: [
-      'node_modules/',
-      resolve(__dirname, './dist/'),
-      resolve(__dirname, './src/**/*.test.ts'),
-      resolve(__dirname, './src/**/*.spec.ts'),
-    ],
+    include: ['./tests/**/*.test.ts', './tests/**/*.spec.ts'],
+    exclude: ['node_modules/', './dist/', './src/**/*.test.ts', './src/**/*.spec.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
-      include: [resolve(__dirname, './src/**/*.ts')],
+      include: ['./src/**/*.ts'],
       exclude: [
         'node_modules/',
-        resolve(__dirname, './dist/'),
-        resolve(__dirname, './tests/'),
+        './dist/',
+        './tests/',
         './**/*.test.ts',
         './**/*.spec.ts',
         './**/*.d.ts',
@@ -31,7 +23,7 @@ export default defineConfig({
     testTimeout: 10000,
     hookTimeout: 10000,
     typecheck: {
-      tsconfig: resolve(__dirname, './tooling/tsconfig.test.json'),
+      tsconfig: './tooling/tsconfig.test.json',
     },
   },
   resolve: {
