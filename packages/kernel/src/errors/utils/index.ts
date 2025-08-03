@@ -10,6 +10,4 @@ export {
   ErrorConverter,
   ErrorValidator,
   ErrorUtils,
-  ErrorCategory,
-  ErrorSeverity,
 } from './error-utils.js';

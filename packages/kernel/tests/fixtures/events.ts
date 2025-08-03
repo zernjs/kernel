@@ -1,11 +1,13 @@
-import type { BaseEvent } from '../../src/types/events.js';
+import type { BaseEvent, EventSource } from '../../src/types/events.js';
+import { createEventSource } from '../../src/types/events.js';
+import { createUtilEventId } from '../../src/types/index.js';
 
 // Test event interfaces for fixtures
 export interface TestEvents {
   'user:created': { id: number; name: string; email: string };
-  'user:updated': { id: number; changes: Record<string, any> };
+  'user:updated': { id: number; changes: Record<string, unknown> };
   'user:deleted': { id: number };
-  'plugin:loaded': { pluginId: string; version: string; metadata?: Record<string, any> };
+  'plugin:loaded': { pluginId: string; version: string; metadata?: Record<string, unknown> };
   'plugin:unloaded': { pluginId: string };
   'plugin:error': { pluginId: string; error: string };
   'kernel:ready': void;
@@ -19,21 +21,21 @@ export interface UserCreatedEvent extends BaseEvent {
   type: 'user:created';
   data: { id: number; name: string; email: string };
   timestamp: number;
-  source: string;
+  source: EventSource;
 }
 
 export interface PluginLoadedEvent extends BaseEvent {
   type: 'plugin:loaded';
-  data: { pluginId: string; version: string; metadata?: Record<string, any> };
+  data: { pluginId: string; version: string; metadata?: Record<string, unknown> };
   timestamp: number;
-  source: string;
+  source: EventSource;
 }
 
 export interface SystemErrorEvent extends BaseEvent {
   type: 'system:error';
   data: { message: string; code?: number; stack?: string };
   timestamp: number;
-  source: string;
+  source: EventSource;
   severity: 'low' | 'medium' | 'high' | 'critical';
 }
 
@@ -82,9 +84,8 @@ export function createUserCreatedEvent(user: (typeof mockUsers)[0]): UserCreated
     type: 'user:created',
     data: user,
     timestamp: Date.now(),
-    source: 'user-service',
-    id: `user-created-${user.id}-${Date.now()}`,
-    version: '1.0.0',
+    source: createEventSource('user-service'),
+    id: createUtilEventId(`user-created-${user.id}-${Date.now()}`),
   };
 }
 
@@ -93,9 +94,8 @@ export function createPluginLoadedEvent(plugin: (typeof mockPlugins)[0]): Plugin
     type: 'plugin:loaded',
     data: plugin,
     timestamp: Date.now(),
-    source: 'plugin-loader',
-    id: `plugin-loaded-${plugin.pluginId}-${Date.now()}`,
-    version: '1.0.0',
+    source: createEventSource('plugin-loader'),
+    id: createUtilEventId(`plugin-loaded-${plugin.pluginId}-${Date.now()}`),
   };
 }
 
@@ -106,12 +106,11 @@ export function createSystemErrorEvent(
 ): SystemErrorEvent {
   return {
     type: 'system:error',
-    data: { message, code },
+    data: { message, ...(code !== undefined && { code }) },
     timestamp: Date.now(),
-    source: 'system',
+    source: createEventSource('system'),
     severity,
-    id: `system-error-${Date.now()}`,
-    version: '1.0.0',
+    id: createUtilEventId(`system-error-${Date.now()}`),
   };
 }
 
@@ -184,9 +183,13 @@ export function delay(ms: number): Promise<void> {
 export function* generateEventSequence(
   events: Array<keyof TestEvents>,
   count: number = 10
-): Generator<{ type: keyof TestEvents; data: any }> {
+): Generator<{ type: keyof TestEvents; data: TestEvents[keyof TestEvents] }> {
+  if (events.length === 0) {
+    return;
+  }
+
   for (let i = 0; i < count; i++) {
-    const eventType = events[i % events.length];
+    const eventType = events[i % events.length]!;
     yield {
       type: eventType,
       data: generateEventData(eventType),

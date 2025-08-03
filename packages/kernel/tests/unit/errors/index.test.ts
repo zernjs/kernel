@@ -31,7 +31,7 @@ import {
   ErrorSuggestion,
   RecoveryStrategy,
 } from '../../../src/errors/index.js';
-import { ErrorCategory, ErrorSeverity } from '../../../src/errors/utils/index.js';
+import { ErrorCategory, ErrorSeverity } from '../../../src/errors/types/base.js';
 import { createPluginId } from '../../../src/types/plugin.js';
 
 // Global DOM mock setup for ErrorDisplay tests
@@ -72,8 +72,7 @@ describe('Error Handling System - Public API', () => {
   describe('exports', () => {
     it('should export core error classes', () => {
       expect(ZernError).toBeDefined();
-      expect(ErrorCategory).toBeDefined();
-      expect(ErrorSeverity).toBeDefined();
+      // ErrorCategory and ErrorSeverity are type aliases, not runtime values
     });
 
     it('should export core components', () => {
@@ -98,26 +97,33 @@ describe('Error Handling System - Public API', () => {
   });
 
   describe('error categories', () => {
-    it('should define all error categories', () => {
-      expect(ErrorCategory.KERNEL).toBe('kernel');
-      expect(ErrorCategory.PLUGIN).toBe('plugin');
-      expect(ErrorCategory.NETWORK).toBe('network');
-      expect(ErrorCategory.CONFIGURATION).toBe('configuration');
-      expect(ErrorCategory.DEPENDENCY).toBe('dependency');
-      expect(ErrorCategory.VALIDATION).toBe('validation');
-      expect(ErrorCategory.SECURITY).toBe('security');
-      expect(ErrorCategory.PERFORMANCE).toBe('performance');
-      expect(ErrorCategory.FILESYSTEM).toBe('filesystem');
-      expect(ErrorCategory.MEMORY).toBe('memory');
+    it('should accept valid error category values', () => {
+      const validCategories: ErrorCategory[] = [
+        'kernel',
+        'plugin',
+        'network',
+        'configuration',
+        'dependency',
+        'validation',
+        'security',
+        'performance',
+        'filesystem',
+        'memory',
+      ];
+
+      validCategories.forEach(category => {
+        expect(typeof category).toBe('string');
+      });
     });
   });
 
   describe('error severities', () => {
-    it('should define all error severities', () => {
-      expect(ErrorSeverity.LOW).toBe('low');
-      expect(ErrorSeverity.MEDIUM).toBe('medium');
-      expect(ErrorSeverity.HIGH).toBe('high');
-      expect(ErrorSeverity.CRITICAL).toBe('critical');
+    it('should accept valid error severity values', () => {
+      const validSeverities: ErrorSeverity[] = ['low', 'medium', 'high', 'critical'];
+
+      validSeverities.forEach(severity => {
+        expect(typeof severity).toBe('string');
+      });
     });
   });
 
@@ -160,7 +166,7 @@ describe('Error Handling System - Public API', () => {
       expect(error).toBeInstanceOf(PluginNotFoundError);
       expect(error).toBeInstanceOf(ZernError);
       expect(error.code).toBe('PLUGIN_NOT_FOUND');
-      expect(error.category).toBe(ErrorCategory.PLUGIN);
+      expect(error.category).toBe('plugin');
     });
 
     it('should create plugin initialization error', () => {
@@ -169,7 +175,7 @@ describe('Error Handling System - Public API', () => {
       expect(error).toBeInstanceOf(PluginInitializationError);
       expect(error).toBeInstanceOf(ZernError);
       expect(error.code).toBe('PLUGIN_INIT_FAILED');
-      expect(error.category).toBe(ErrorCategory.PLUGIN);
+      expect(error.category).toBe('plugin');
     });
 
     it('should create missing dependency error', () => {
@@ -179,7 +185,7 @@ describe('Error Handling System - Public API', () => {
       expect(error).toBeInstanceOf(MissingDependencyError);
       expect(error).toBeInstanceOf(ZernError);
       expect(error.code).toBe('MISSING_DEPENDENCY');
-      expect(error.category).toBe(ErrorCategory.DEPENDENCY);
+      expect(error.category).toBe('dependency');
     });
 
     it('should create plugin configuration error', () => {
@@ -188,7 +194,7 @@ describe('Error Handling System - Public API', () => {
       expect(error).toBeInstanceOf(PluginConfigurationError);
       expect(error).toBeInstanceOf(ZernError);
       expect(error.code).toBe('PLUGIN_CONFIG_ERROR');
-      expect(error.category).toBe(ErrorCategory.PLUGIN);
+      expect(error.category).toBe('plugin');
     });
 
     it('should create plugin version conflict error', () => {
@@ -198,7 +204,7 @@ describe('Error Handling System - Public API', () => {
       expect(error).toBeInstanceOf(PluginVersionConflictError);
       expect(error).toBeInstanceOf(ZernError);
       expect(error.code).toBe('PLUGIN_VERSION_CONFLICT');
-      expect(error.category).toBe(ErrorCategory.PLUGIN);
+      expect(error.category).toBe('plugin');
     });
   });
 });
@@ -260,12 +266,12 @@ export const testUtils = {
   createMockError: (
     message: string,
     code: string,
-    category: keyof typeof ErrorCategory,
-    severity: keyof typeof ErrorSeverity
+    category: ErrorCategory,
+    severity: ErrorSeverity
   ): ZernError => {
     class MockError extends ZernError {
-      public readonly category = ErrorCategory[category];
-      public readonly severity = ErrorSeverity[severity];
+      public readonly category = category;
+      public readonly severity = severity;
       public readonly recoverable = true;
       public readonly code = code;
 
