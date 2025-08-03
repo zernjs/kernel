@@ -247,6 +247,7 @@ export type {
   PluginEventsByCategory,
   SystemEventsByCategory,
   DevEventsByCategory,
+  KernelEventEmitter,
 } from './events.js';
 
 // Event utility functions
@@ -413,6 +414,7 @@ export {
   createPluginVersion as createUtilPluginVersion,
   createEventId as createUtilEventId,
   createStatePath,
+  createNodeVersion,
 
   // Type guards
   isString,
