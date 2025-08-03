@@ -43,6 +43,15 @@ jobs:
         run: pnpm run coverage:badge
         working-directory: ./packages/kernel
 
+      - name: Upload coverage artifacts (including badges)
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-badges
+          path: |
+            ./packages/kernel/coverage/badges.json
+            ./packages/kernel/coverage/README.md
+          retention-days: 30
+
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
         with:
@@ -113,25 +122,11 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Download coverage badges
+        uses: actions/download-artifact@v4
         with:
-          node-version: '20.x'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run tests with coverage
-        run: pnpm run test:coverage
-        working-directory: ./packages/kernel
-
-      - name: Generate coverage badges
-        run: pnpm run coverage:badge
-        working-directory: ./packages/kernel
+          name: coverage-badges
+          path: ./packages/kernel/coverage/
 
       - name: Commit coverage badges
         run: |
