@@ -105,6 +105,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add -f packages/kernel/coverage/badges.json packages/kernel/coverage/README.md
+          git add -f packages/kernel/coverage/badges.json packages/kernel/coverage/README.md README.md
           git diff --staged --quiet || git commit -m "chore: update coverage badges [skip ci]"
           git push

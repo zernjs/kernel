@@ -147,6 +147,22 @@ Generated on: ${new Date().toISOString()}
 
     fs.writeFileSync(badgeReadmePath, badgeReadmeContent);
 
+    // Atualiza o README.md principal com o badge dinâmico
+    const mainReadmePath = path.join(__dirname, '..', '..', '..', 'README.md');
+    if (fs.existsSync(mainReadmePath)) {
+      let mainReadmeContent = fs.readFileSync(mainReadmePath, 'utf8');
+
+      // Regex para encontrar e substituir o badge de coverage
+      const coverageBadgeRegex = /\[\!\[Coverage\]\([^\)]+\)\]\([^\)]+\)/;
+      const newCoverageBadge = `[![Coverage](${badges.overall})](./packages/kernel/coverage/README.md)`;
+
+      if (coverageBadgeRegex.test(mainReadmeContent)) {
+        mainReadmeContent = mainReadmeContent.replace(coverageBadgeRegex, newCoverageBadge);
+        fs.writeFileSync(mainReadmePath, mainReadmeContent);
+        console.log('✅ README.md principal atualizado com novo badge de coverage!');
+      }
+    }
+
     console.log('✅ Coverage badges gerados com sucesso!');
     console.log(`📊 Coverage geral: ${overall}%`);
     console.log(`📁 Badges salvos em: ${badgesPath}`);
