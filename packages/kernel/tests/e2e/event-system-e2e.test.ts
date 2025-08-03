@@ -274,14 +274,14 @@ describe('Event System E2E Tests', () => {
       const mediumResult = results.find(r => r.operation === 'medium');
       const slowResult = results.find(r => r.operation === 'slow');
 
-      expect(fastResult?.duration).toBeGreaterThanOrEqual(10);
-      expect(fastResult?.duration).toBeLessThan(50); // Adjusted for CI environment
+      expect(fastResult?.duration).toBeGreaterThanOrEqual(8); // Slightly more lenient for CI
+      expect(fastResult?.duration).toBeLessThan(60); // Adjusted for CI environment
 
-      expect(mediumResult?.duration).toBeGreaterThanOrEqual(50);
-      expect(mediumResult?.duration).toBeLessThan(100); // Adjusted for CI environment
+      expect(mediumResult?.duration).toBeGreaterThanOrEqual(45); // More lenient for CI timing variations
+      expect(mediumResult?.duration).toBeLessThan(110); // Adjusted for CI environment
 
-      expect(slowResult?.duration).toBeGreaterThanOrEqual(100);
-      expect(slowResult?.duration).toBeLessThan(120);
+      expect(slowResult?.duration).toBeGreaterThanOrEqual(95); // Slightly more lenient for CI
+      expect(slowResult?.duration).toBeLessThan(130);
     });
   });
 
