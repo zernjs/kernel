@@ -412,9 +412,9 @@ describe('TypedEventEmitter', () => {
     });
 
     it('should timeout when waiting for events', async () => {
-      const promise = emitter.waitFor('kernel:started', 50);
+      const promise = emitter.waitFor('kernel:started', 100);
 
-      await expect(promise).rejects.toThrow('Timeout waiting for event kernel:started after 50ms');
+      await expect(promise).rejects.toThrow('Timeout waiting for event kernel:started after 100ms');
     });
   });
 
