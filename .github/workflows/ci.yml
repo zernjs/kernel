@@ -43,15 +43,15 @@ jobs:
         run: pnpm run test:coverage
 
       - name: Generate coverage badges
-        run: npx --yes coverage-badges || true
+        run: npx --yes coverage-badges --source coverage/coverage-summary.json --output coverage/badges.svg || true
 
       - name: Upload coverage artifacts (including badges)
         uses: actions/upload-artifact@v4
         with:
           name: coverage-badges
           path: |
-            ./coverage/badges.json
-            ./coverage/README.md
+            ./coverage/badges.svg
+            ./coverage/coverage-summary.json
           if-no-files-found: ignore
           retention-days: 30
 
@@ -104,6 +104,6 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add -f coverage/badges.json coverage/README.md README.md
+          git add -f coverage/badges.svg coverage/coverage-summary.json README.md
           git diff --staged --quiet || git commit -m "chore: update coverage badges [skip ci]"
           git push
