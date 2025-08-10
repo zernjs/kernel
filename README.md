@@ -16,7 +16,7 @@ Type-safe plugin runtime with deterministic load order, lifecycle, hooks, events
 [![Node.js](https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
 [![MIT License](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/zernjs/zern-kernel/ci.yml?style=for-the-badge)](https://github.com/zernjs/zern-kernel/actions)
-[![Coverage](https://img.shields.io/badge/coverage-59%25-red?style=for-the-badge)](./packages/kernel/coverage/README.md)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fzernjs%2Fzern-kernel%2Fmain%2Fcoverage%2Fcoverage-endpoint.json&style=for-the-badge)](./coverage/coverage-summary.json)
 
 </div>
 
