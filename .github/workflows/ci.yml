@@ -33,33 +33,30 @@ jobs:
 
       - name: Lint code
         run: pnpm run lint
-        working-directory: ./packages/kernel
 
       - name: Type check
         run: pnpm run type-check
-        working-directory: ./packages/kernel
 
       - name: Run tests with coverage
         run: pnpm run test:coverage
-        working-directory: ./packages/kernel
 
       - name: Generate coverage badges
-        run: pnpm run coverage:badge
-        working-directory: ./packages/kernel
+        run: npx --yes coverage-badges || true
 
       - name: Upload coverage artifacts (including badges)
         uses: actions/upload-artifact@v4
         with:
           name: coverage-badges
           path: |
-            ./packages/kernel/coverage/badges.json
-            ./packages/kernel/coverage/README.md
+            ./coverage/badges.json
+            ./coverage/README.md
+          if-no-files-found: ignore
           retention-days: 30
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v4
         with:
-          file: ./packages/kernel/coverage/coverage-final.json
+          file: ./coverage/coverage-final.json
           flags: kernel
           name: kernel-coverage
           fail_ci_if_error: false
@@ -70,7 +67,7 @@ jobs:
         uses: romeovs/lcov-reporter-action@v0.3.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          lcov-file: ./packages/kernel/coverage/lcov.info
+          lcov-file: ./coverage/lcov.info
           delete-old-comments: true
 
       - name: Upload coverage artifacts
@@ -78,8 +75,8 @@ jobs:
         with:
           name: coverage-report
           path: |
-            ./packages/kernel/coverage/
-            !./packages/kernel/coverage/tmp/
+            ./coverage/
+            !./coverage/tmp/
           retention-days: 30
 
   update-coverage-badge:
@@ -99,12 +96,12 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: coverage-badges
-          path: ./packages/kernel/coverage/
+          path: ./coverage/
 
       - name: Commit coverage badges
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add -f packages/kernel/coverage/badges.json packages/kernel/coverage/README.md README.md
+          git add -f coverage/badges.json coverage/README.md README.md
           git diff --staged --quiet || git commit -m "chore: update coverage badges [skip ci]"
           git push
