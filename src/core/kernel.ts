@@ -152,10 +152,29 @@ export class Kernel<
   private registerDeclaratives(resolved: PluginInstance[]): void {
     const map: Record<string, Record<string, EventDef>> = {};
     for (const p of resolved) {
-      const pluginHooks = (p as unknown as { hooks?: DeclaredHooksShape }).hooks;
+      const pluginHooks = (
+        p as unknown as {
+          hooks?:
+            | DeclaredHooksShape
+            | { namespace: string; spec: Record<string, import('@hooks/types').HookDef> }
+            | Record<string, import('@hooks/types').HookDef>;
+        }
+      ).hooks;
       if (pluginHooks) {
-        for (const hookName of Object.keys(pluginHooks)) {
-          this.hooks.define(`${p.metadata.name}.${hookName}`);
+        if (
+          typeof (pluginHooks as { namespace?: unknown }).namespace === 'string' &&
+          typeof (pluginHooks as { spec?: unknown }).spec === 'object'
+        ) {
+          const { namespace, spec } = pluginHooks as {
+            namespace: string;
+            spec: Record<string, import('@hooks/types').HookDef>;
+          };
+          const ns = this.hooks.namespace(namespace);
+          for (const key of Object.keys(spec)) ns.define(key);
+        } else if (typeof pluginHooks === 'object') {
+          for (const hookName of Object.keys(pluginHooks as DeclaredHooksShape)) {
+            this.hooks.define(`${p.metadata.name}.${hookName}`);
+          }
         }
       }
 

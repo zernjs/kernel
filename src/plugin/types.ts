@@ -28,6 +28,12 @@ import type { AlertDef } from '../alerts/types';
 import type { HookDef } from '../hooks/types';
 import type { TypedAlerts, GlobalAlertMap } from '../alerts/types';
 
+/** Legacy runtime-declared hooks map (pre-unification tests rely on this shape). */
+export type LegacyDeclaredHooks = Record<
+  string,
+  { on: unknown; off: unknown; emit: unknown; once: unknown }
+>;
+
 export interface PluginSpec<
   Name extends string = string,
   API extends object = object,
@@ -41,7 +47,10 @@ export interface PluginSpec<
   dependsOn?: Deps;
   loadBefore?: readonly string[];
   loadAfter?: readonly string[];
-  hooks?: { namespace: string; spec: Record<string, HookDef> };
+  hooks?:
+    | LegacyDeclaredHooks
+    | Record<string, HookDef>
+    | { namespace: string; spec: Record<string, HookDef> };
   events?: { namespace: string; spec: Record<string, EventDef> };
   errors?: { namespace: string; kinds: readonly string[] };
   alerts?: { namespace: string; spec: Record<string, AlertDef> };
