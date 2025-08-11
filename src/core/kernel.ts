@@ -10,6 +10,7 @@ import { resolvePluginOrder } from '@resolver';
 import { LifecycleEngine, LifecycleEvents } from '@lifecycle';
 import { HookBus } from '@hooks';
 import { EventBus } from '@events';
+import type { EventDef, TypedEvents } from '@types';
 import { createNodeEventEmitterAdapter } from '@events/adapters';
 import { createRxjsAdapter } from '@events/adapters';
 import { ErrorBus, isKernelError, defineErrors, createErrorFactory } from '@errors';
@@ -32,6 +33,7 @@ type DeclaredEventsShape = {
 export class Kernel<
   TPlugins extends Record<string, PluginInstance> = Record<never, never>,
   TAugments extends Record<string, object> = Record<never, never>,
+  TEventMap extends Record<string, Record<string, EventDef>> = Record<never, never>,
 > {
   public readonly plugins: PluginAccessor<ApplyAugmentsToPlugins<TPlugins, TAugments>>;
   private readonly registry: PluginRegistry;
@@ -39,7 +41,8 @@ export class Kernel<
   private readonly lifecycle = new LifecycleEngine();
   public readonly lifecycleEvents = new LifecycleEvents();
   public readonly hooks: HookBus;
-  public readonly events = new EventBus();
+  public readonly events: TypedEvents<TEventMap> =
+    new EventBus() as unknown as TypedEvents<TEventMap>;
   public readonly errors = new ErrorBus();
   public readonly alerts = new AlertBus();
 
@@ -93,11 +96,7 @@ export class Kernel<
     }
   }
 
-  get<K extends keyof ApplyAugmentsToPlugins<TPlugins, TAugments> & string>(
-    name: K
-  ): ApplyAugmentsToPlugins<TPlugins, TAugments>[K] | null {
-    return this.plugins.get(name);
-  }
+  // removed legacy get API in favor of `kernel.plugins.<name>`
 
   async destroy(): Promise<void> {
     const all = this.plugins.list().slice().reverse();
@@ -147,6 +146,7 @@ export class Kernel<
   }
 
   private registerDeclaratives(resolved: PluginInstance[]): void {
+    const map: Record<string, Record<string, EventDef>> = {};
     for (const p of resolved) {
       const pluginHooks = (p as unknown as { hooks?: DeclaredHooksShape }).hooks;
       if (pluginHooks) {
@@ -168,6 +168,8 @@ export class Kernel<
             }
           );
         }
+        // accumulate for typed namespace map
+        map[pluginEvents.namespace] = pluginEvents.spec as unknown as Record<string, EventDef>;
       }
 
       const pluginErrors = (
@@ -188,6 +190,8 @@ export class Kernel<
         );
       }
     }
+    // cast events to a typed view if any specs were declared
+    void map;
   }
 
   private async runSetupAndCollectTargets(
@@ -216,7 +220,9 @@ export class Kernel<
           throw apiResult.error;
         }
         const api = apiResult.value;
-        const selfInstance = this.plugins.get(p.metadata.name);
+        const selfInstance = (this.plugins as unknown as Record<string, unknown>)[
+          p.metadata.name
+        ] as unknown;
         if (selfInstance) Object.assign(selfInstance as unknown as object, api as object);
         targets[p.metadata.name] = api as object;
       }
@@ -234,14 +240,23 @@ export class Kernel<
   private buildSetupContext(
     p: PluginInstance,
     extend: (target: string, api: Record<string, unknown>) => void
-  ) {
+  ): {
+    kernel: Kernel<TPlugins, TAugments, TEventMap>;
+    hooks: HookBus;
+    events: TypedEvents<TEventMap>;
+    errors: ErrorBus;
+    alerts: AlertBus;
+    plugins: Record<string, unknown>;
+    use: (name: string) => unknown;
+    extend: (target: string, api: Record<string, unknown>) => void;
+  } {
     const ctor = (p as unknown as { constructor: { dependsOn?: Array<new () => PluginInstance> } })
       .constructor;
     const depCtors: Array<new () => PluginInstance> = ctor.dependsOn ?? [];
     const depPlugins: Record<string, unknown> = {};
     for (const dCtor of depCtors) {
       const depName = new dCtor().metadata.name;
-      const inst = this.plugins.get(depName);
+      const inst = (this.plugins as unknown as Record<string, unknown>)[depName] as unknown;
       if (inst) depPlugins[depName] = inst as unknown as object;
     }
     return {
@@ -258,7 +273,7 @@ export class Kernel<
 
   private applyAugmentTargets(targets: Record<string, object>): void {
     for (const [name, api] of Object.entries(targets)) {
-      const inst = this.plugins.get(name);
+      const inst = (this.plugins as unknown as Record<string, unknown>)[name] as unknown;
       if (inst) Object.assign(inst as unknown as object, api);
     }
   }

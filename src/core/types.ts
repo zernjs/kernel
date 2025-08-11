@@ -42,7 +42,6 @@ export interface IPluginRegistry {
 export type PluginAccessor<TPlugins extends object> = {
   readonly [K in keyof TPlugins]: TPlugins[K];
 } & {
-  get<K extends keyof TPlugins & string>(name: K): TPlugins[K] | null;
   register(plugin: PluginInstance, order?: PluginLoadOrder): void;
   has(name: string): boolean;
   list(): PluginInstance[];

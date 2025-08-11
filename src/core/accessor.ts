@@ -26,7 +26,7 @@ function hasOwnProperty(base: object, registry: IPluginRegistry, prop: PropKey):
 
 function listProxyKeys(registry: IPluginRegistry): (string | symbol)[] {
   const names = registry.list().map(p => p.metadata.name);
-  const methods = ['get', 'register', 'has', 'list', 'getLoadOrder', 'clear'];
+  const methods = ['register', 'has', 'list', 'getLoadOrder', 'clear'];
   return [...methods, ...names];
 }
 
@@ -35,9 +35,8 @@ export function createPluginAccessor<TPlugins extends Record<string, PluginInsta
 ): PluginAccessor<TPlugins> {
   const base: Pick<
     PluginAccessor<TPlugins>,
-    'get' | 'register' | 'has' | 'list' | 'getLoadOrder' | 'clear'
+    'register' | 'has' | 'list' | 'getLoadOrder' | 'clear'
   > = {
-    get: registry.get.bind(registry) as PluginAccessor<TPlugins>['get'],
     register: registry.register.bind(registry) as PluginAccessor<TPlugins>['register'],
     has: registry.has.bind(registry) as PluginAccessor<TPlugins>['has'],
     list: registry.list.bind(registry) as PluginAccessor<TPlugins>['list'],
@@ -45,7 +44,7 @@ export function createPluginAccessor<TPlugins extends Record<string, PluginInsta
     clear: registry.clear.bind(registry) as PluginAccessor<TPlugins>['clear'],
   };
 
-  return new Proxy(base as PluginAccessor<TPlugins>, {
+  return new Proxy(base as unknown as PluginAccessor<TPlugins>, {
     get(target, prop: PropKey): unknown {
       if (typeof prop !== 'symbol' && hasOwn(target as object, prop))
         return getOwnProperty(target, prop);

@@ -112,11 +112,15 @@ class SimpleEvent<Payload> implements Event<Payload> {
  * @param opts Options for event delivery/startup/buffer behavior.
  * @returns Event spec token.
  */
-export function event(opts?: EventOptions): {
+export function event<Payload = unknown>(
+  opts?: EventOptions
+): {
   __type: 'event-def';
+  /** Phantom payload type carrier for typing helpers */
+  __payload?: Payload;
   options?: EventOptions;
 } {
-  return { __type: 'event-def', options: opts };
+  return { __type: 'event-def', options: opts } as const;
 }
 
 /**
@@ -125,11 +129,40 @@ export function event(opts?: EventOptions): {
  * @param spec Event spec map.
  * @returns Namespaced spec descriptor.
  */
-export function createEvents(
+export function createEvents<TSpec extends Record<string, ReturnType<typeof event<unknown>>>>(
   namespace: string,
-  spec: Record<string, ReturnType<typeof event>>
-): { namespace: string; spec: Record<string, ReturnType<typeof event>> } {
-  return { namespace, spec };
+  spec: TSpec
+): { namespace: string; spec: TSpec } {
+  return { namespace, spec } as const;
+}
+
+type ExtractPayload<T> = T extends { __payload?: infer P } ? P : unknown;
+
+/**
+ * Bind typed helpers using a descriptor returned by createEvents(namespace, spec).
+ */
+export function bindEvents<TSpec extends Record<string, ReturnType<typeof event<unknown>>>>(
+  bus: EventBus,
+  descriptor: { namespace: string; spec: TSpec }
+): {
+  emit: <K extends keyof TSpec & string>(
+    event: K,
+    payload: ExtractPayload<TSpec[K]>
+  ) => Promise<void>;
+  on: <K extends keyof TSpec & string>(
+    event: K,
+    handler: (payload: ExtractPayload<TSpec[K]>) => void | Promise<void>
+  ) => () => void;
+} {
+  const { namespace, spec } = descriptor;
+  void spec; // type-only
+  return {
+    emit: async (event, payload): Promise<void> => {
+      await bus.namespace(namespace).emit(event as string, payload as unknown);
+    },
+    on: (event, handler): (() => void) =>
+      bus.namespace(namespace).on(event as string, handler as (p: unknown) => void),
+  } as const;
 }
 
 export class EventBus {

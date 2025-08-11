@@ -3,6 +3,7 @@ import { Database } from './database.plugin';
 
 export type UtilsAPI = {
   formatDate: (d: Date) => string;
+  log: (msg: string) => void;
 };
 
 export const Utils = plugin.definePlugin({
@@ -21,6 +22,9 @@ export const Utils = plugin.definePlugin({
     return {
       formatDate(d: Date): string {
         return d.toISOString();
+      },
+      log(msg: string): void {
+        console.log(`[utils] ${msg}`);
       },
     } satisfies UtilsAPI;
   },

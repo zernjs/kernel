@@ -76,3 +76,40 @@ export interface NamespaceApi {
 export type EventHandlerSet<Payload> = Set<EventHandler<Payload>>;
 
 export * from './adapters/types';
+
+/**
+ * Structural event definition type carried by createEvents/event for typing only.
+ */
+export type EventDef<Payload = unknown> = {
+  __type: 'event-def';
+  __payload?: Payload;
+  options?: EventOptions;
+};
+
+export type NamespaceSpec<TSpec extends Record<string, EventDef>> = {
+  namespace: string;
+  spec: TSpec;
+};
+
+export type PayloadOf<E> = E extends { __payload?: infer P } ? P : unknown;
+
+export type NamespaceApiTyped<TSpec extends Record<string, EventDef>> = {
+  define: <K extends keyof TSpec & string>(
+    name: K,
+    opts?: EventOptions
+  ) => Event<PayloadOf<TSpec[K]>>;
+  get: <K extends keyof TSpec & string>(name: K) => Event<PayloadOf<TSpec[K]>> | undefined;
+  on: <K extends keyof TSpec & string>(
+    name: K,
+    handler: EventHandler<PayloadOf<TSpec[K]>>
+  ) => () => void;
+  emit: <K extends keyof TSpec & string>(name: K, payload: PayloadOf<TSpec[K]>) => Promise<void>;
+  use: (mw: Middleware) => void;
+};
+
+export type TypedEvents<TMap extends Record<string, Record<string, EventDef>>> = Omit<
+  import('./event-bus').EventBus,
+  'namespace'
+> & {
+  namespace: <K extends keyof TMap & string>(namespaceName: K) => NamespaceApiTyped<TMap[K]>;
+};

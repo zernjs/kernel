@@ -41,7 +41,7 @@ describe('Augmentations', () => {
     const kernel = createKernel().use(Database).use(Utils).build();
     await kernel.init();
 
-    const db = kernel.get('database')!;
+    const db = kernel.plugins.database;
     expect(typeof db.backup).toBe('function');
     expect(typeof db.optimize).toBe('function');
     expect(await db.backup('daily')).toBe('backup:daily');

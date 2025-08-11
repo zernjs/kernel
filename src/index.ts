@@ -27,6 +27,9 @@ export * as utils from './utils';
 
 import { createKernel } from './core/createKernel';
 import type { Kernel } from './core/kernel';
+import { bindEvents } from './events/event-bus';
+import type { EventBus } from './events/event-bus';
+import type { event as eventFactory } from './events/event-bus';
 
 /**
  * Internal global builder singleton used by {@link getKernel} and {@link ensureKernel}.
@@ -96,9 +99,64 @@ export async function useKernel(): Promise<Kernel> {
  * await created.emit({ id: 'u1' });
  * ```
  */
-export async function useEvents(): Promise<Kernel['events']> {
-  return await withKernel(k => k.events);
+
+/* eslint-disable no-redeclare */
+export async function useEvents(): Promise<Kernel['events']>;
+export async function useEvents<
+  TSpec extends Record<string, ReturnType<typeof eventFactory<unknown>>>,
+>(descriptor: {
+  namespace: string;
+  spec: TSpec;
+}): Promise<{
+  emit: <K extends keyof TSpec & string>(
+    event: K,
+    payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
+  ) => Promise<void>;
+  on: <K extends keyof TSpec & string>(
+    event: K,
+    handler: (
+      payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
+    ) => void | Promise<void>
+  ) => () => void;
+}>;
+export async function useEvents<
+  TSpec extends Record<string, ReturnType<typeof eventFactory<unknown>>>,
+>(descriptor?: {
+  namespace: string;
+  spec: TSpec;
+}): Promise<
+  | Kernel['events']
+  | {
+      emit: <K extends keyof TSpec & string>(
+        event: K,
+        payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
+      ) => Promise<void>;
+      on: <K extends keyof TSpec & string>(
+        event: K,
+        handler: (
+          payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
+        ) => void | Promise<void>
+      ) => () => void;
+    }
+> {
+  const k = await withKernel(kernel => kernel);
+  if (descriptor) {
+    return bindEvents(k.events as unknown as EventBus, descriptor) as unknown as Promise<{
+      emit: <K extends keyof TSpec & string>(
+        event: K,
+        payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
+      ) => Promise<void>;
+      on: <K extends keyof TSpec & string>(
+        event: K,
+        handler: (
+          payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
+        ) => void | Promise<void>
+      ) => () => void;
+    }>;
+  }
+  return k.events;
 }
+/* eslint-enable no-redeclare */
 
 /**
  * Get the Hooks bus from the global Kernel.
@@ -138,9 +196,8 @@ export async function emitEvent<Payload>(
   name: string,
   payload: Payload
 ): Promise<void> {
-  const bus = await useEvents();
-  const ev = bus.namespace(namespace).define<Payload>(name);
-  await ev.emit(payload);
+  const bus = (await useEvents()) as unknown as EventBus;
+  await bus.namespace(namespace).emit(name as string, payload as unknown);
 }
 
 /**
