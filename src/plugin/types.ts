@@ -1,8 +1,18 @@
+/**
+ * @file Public types for the Plugin layer.
+ */
+
+/** -------------------------
+ * Domain types (stable codes)
+ * ------------------------- */
 export type ConflictPolicy = 'error' | 'override' | 'namespace';
 
+/** -------------------------
+ * Public API types
+ * ------------------------- */
 export interface AugmentationOptions {
   policy?: ConflictPolicy;
-  namespacePrefix?: string; // used when policy === 'namespace'
+  namespacePrefix?: string;
 }
 
 import type { PluginOptionsSpec } from './options';
@@ -22,7 +32,6 @@ export interface PluginSpec<
   name: Name;
   version: string;
   description?: string;
-  // options schema (validated at kernel.init)
   options?: PluginOptionsSpec | undefined;
   dependsOn?: Deps;
   loadBefore?: readonly string[];
@@ -31,7 +40,7 @@ export interface PluginSpec<
   events?: { namespace: string; spec: Record<string, { __type: 'event-def'; options?: unknown }> };
   errors?: { namespace: string; kinds: readonly string[] };
   alerts?: { namespace: string; kinds: readonly string[] };
-  augments?: Aug; // declarativo: targetName -> api fragment (preserve literal keys)
+  augments?: Aug;
   setup(ctx: SetupContext<NonNullable<Deps>>, options?: unknown): API | Promise<API>;
 }
 
@@ -52,8 +61,9 @@ export type DetailedDep = {
 };
 export type DepItem = PlainDep | DetailedDep;
 
-// --------- Typed ctx helpers (dependencies → plugins map) ---------
-
+/** -------------------------
+ * Typed ctx helpers (dependencies → plugins map)
+ * ------------------------- */
 type ExtractCtor<D> = D extends { plugin: infer C } ? C : D;
 
 type DepsToPluginMap<Deps extends readonly DepItem[]> = Deps extends readonly []
@@ -84,12 +94,11 @@ export type SetupContext<Deps extends readonly DepItem[]> = BaseSetupContext &
     use: <K extends keyof DepsToPluginMap<Deps> & string>(name: K) => DepsToPluginMap<Deps>[K];
   };
 
-// Public alias with friendlier name for DX; default keeps it generic
+/** Public alias for DX; default keeps it generic. */
 export type ZKernelContext<Deps extends readonly DepItem[] = readonly DepItem[]> =
   SetupContext<Deps>;
 
-// Helper type used to give contextual typing to `definePlugin` so
-// `setup(ctx)` is inferred from `dependsOn` without manual generics.
+/** Helper type used to give contextual typing to `definePlugin`. */
 export type InferablePluginSpec<
   Name extends string,
   Deps extends readonly DepItem[],

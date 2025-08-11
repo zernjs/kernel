@@ -1,3 +1,7 @@
+/**
+ * @file Timing helpers: delay, debounce, throttle, timeout, retry.
+ */
+
 export function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
@@ -30,21 +34,28 @@ export function throttle<T extends (...args: unknown[]) => unknown>(
   };
 }
 
+export interface AbortSignalLike {
+  aborted: boolean;
+  addEventListener: (type: 'abort', cb: () => void, opts?: { once?: boolean }) => void;
+}
+
+function toPromise<T>(promiseOrFn: Promise<T> | (() => Promise<T>)): Promise<T> {
+  return typeof promiseOrFn === 'function' ? (promiseOrFn as () => Promise<T>)() : promiseOrFn;
+}
+
 export async function timeout<T>(
   promiseOrFn: Promise<T> | (() => Promise<T>),
   ms: number,
-  signal?: {
-    aborted: boolean;
-    addEventListener: (type: 'abort', cb: () => void, opts?: { once?: boolean }) => void;
-  }
+  signal?: AbortSignalLike
 ): Promise<T> {
-  const work =
-    typeof promiseOrFn === 'function' ? (promiseOrFn as () => Promise<T>)() : promiseOrFn;
+  const work = toPromise(promiseOrFn);
   let timer: ReturnType<typeof setTimeout> | null = null;
   const abortErr = new Error('Timeout');
+
   const timeoutP = new Promise<never>((_, reject) => {
     timer = setTimeout(() => reject(abortErr), ms);
   });
+
   try {
     if (signal) {
       if (signal.aborted) throw abortErr;

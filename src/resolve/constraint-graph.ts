@@ -1,43 +1,52 @@
-import type { Edge, EdgeType } from '@types';
+/**
+ * @file Directed graph to model plugin ordering constraints.
+ */
+import type { Edge, EdgeType, NodeName } from '@types';
 
 export class ConstraintGraph {
-  private readonly nodes = new Set<string>();
-  private readonly outgoing = new Map<string, Edge[]>();
-  private readonly incomingCount = new Map<string, number>();
+  private readonly nodeSet = new Set<NodeName>();
+  private readonly outgoingMap = new Map<NodeName, Edge[]>();
+  private readonly incomingCountMap = new Map<NodeName, number>();
 
-  addNode(name: string): void {
-    if (!this.nodes.has(name)) {
-      this.nodes.add(name);
-      this.outgoing.set(name, []);
-      this.incomingCount.set(name, 0);
-    }
+  addNode(name: NodeName): void {
+    if (this.nodeSet.has(name)) return;
+    this.nodeSet.add(name);
+    this.outgoingMap.set(name, []);
+    this.incomingCountMap.set(name, 0);
   }
 
-  addEdge(from: string, to: string, type: EdgeType): void {
+  addEdge(from: NodeName, to: NodeName, type: EdgeType): void {
     if (from === to) return;
     this.addNode(from);
     this.addNode(to);
-    const weight = type === 'dep' ? 3 : type === 'user' ? 2 : 1;
-    const edge: Edge = { from, to, type, weight };
-    const list = this.outgoing.get(from);
+    const edge: Edge = { from, to, type, weight: this.computeEdgeWeight(type) };
+    this.addOutgoingEdge(from, edge);
+    this.incomingCountMap.set(to, (this.incomingCountMap.get(to) ?? 0) + 1);
+  }
+
+  getNodes(): NodeName[] {
+    return Array.from(this.nodeSet);
+  }
+
+  getOutgoing(name: NodeName): Edge[] {
+    return this.outgoingMap.get(name) ?? [];
+  }
+
+  getIncomingCount(name: NodeName): number {
+    return this.incomingCountMap.get(name) ?? 0;
+  }
+
+  decrementIncoming(name: NodeName): void {
+    const curr = this.incomingCountMap.get(name) ?? 0;
+    this.incomingCountMap.set(name, Math.max(0, curr - 1));
+  }
+
+  private addOutgoingEdge(from: NodeName, edge: Edge): void {
+    const list = this.outgoingMap.get(from);
     if (list) list.push(edge);
-    this.incomingCount.set(to, (this.incomingCount.get(to) ?? 0) + 1);
   }
 
-  getNodes(): string[] {
-    return Array.from(this.nodes);
-  }
-
-  getOutgoing(name: string): Edge[] {
-    return this.outgoing.get(name) ?? [];
-  }
-
-  getIncomingCount(name: string): number {
-    return this.incomingCount.get(name) ?? 0;
-  }
-
-  decrementIncoming(name: string): void {
-    const curr = this.incomingCount.get(name) ?? 0;
-    this.incomingCount.set(name, Math.max(0, curr - 1));
+  private computeEdgeWeight(type: EdgeType): number {
+    return type === 'dep' ? 3 : type === 'user' ? 2 : 1;
   }
 }

@@ -1,3 +1,6 @@
+/**
+ * @file Helpers to build plugin descriptors and metadata.
+ */
 import type { DepItem, DetailedDep, PlainDep, PluginSpec } from '@types';
 import { isString } from '@utils';
 
@@ -24,11 +27,14 @@ export function toDependencyRecord(dep: DepItem): {
   return isDetailed(dep) ? { name, version: dep.version, optional: dep.optional } : { name };
 }
 
+function normalizeName<Name extends string>(name: Name): Name {
+  return isString(name) ? name : (String(name) as Name);
+}
+
 export function createPluginMetadata<const Name extends string, API extends object>(
   spec: PluginSpec<Name, API>
 ): PluginMetadata<Name> {
-  // normalize name to a safe identifier-like (keep as-is if already a valid string)
-  const normalizedName = isString(spec.name) ? spec.name : String(spec.name);
+  const normalizedName = normalizeName(spec.name);
   const metadata: PluginMetadata<Name> = {
     name: normalizedName as Name,
     version: spec.version,

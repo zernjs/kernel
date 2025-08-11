@@ -1,28 +1,45 @@
+/**
+ * @file Concurrency primitives: Semaphore, TaskQueue, and parallelMap.
+ */
+
+type Release = () => void;
+type Waiter = () => void;
+type Task = () => Promise<void>;
+type WorkerFn<T, U> = (item: T, index: number) => Promise<U>;
+
 export class Semaphore {
   private counter: number;
-  private readonly queue: Array<() => void> = [];
+  private readonly queue: Waiter[] = [];
 
   constructor(private readonly maxConcurrency: number) {
     this.counter = maxConcurrency;
   }
 
-  async acquire(): Promise<() => void> {
+  async acquire(): Promise<Release> {
     if (this.counter > 0) {
       this.counter -= 1;
       return () => this.release();
     }
-    return new Promise(resolve => {
-      this.queue.push(() => {
-        this.counter -= 1;
-        resolve(() => this.release());
-      });
+    return await new Promise<Release>(resolve => {
+      this.pushWaiter(resolve);
     });
   }
 
   private release(): void {
     this.counter += 1;
-    const next = this.queue.shift();
+    const next = this.shiftWaiter();
     if (next) next();
+  }
+
+  private pushWaiter(resolve: (release: Release) => void): void {
+    this.queue.push(() => {
+      this.counter -= 1;
+      resolve(() => this.release());
+    });
+  }
+
+  private shiftWaiter(): Waiter | undefined {
+    return this.queue.shift();
   }
 }
 
@@ -36,10 +53,10 @@ export async function withSemaphore<T>(sem: Semaphore, fn: () => Promise<T>): Pr
 }
 
 export class TaskQueue {
-  private readonly queue: Array<() => Promise<void>> = [];
+  private readonly queue: Task[] = [];
   private running = false;
 
-  push(task: () => Promise<void>): void {
+  push(task: Task): void {
     this.queue.push(task);
     void this.run();
   }
@@ -48,7 +65,7 @@ export class TaskQueue {
     if (this.running) return;
     this.running = true;
     while (this.queue.length) {
-      const t = this.queue.shift();
+      const t = this.nextTask();
       if (!t) break;
       try {
         await t();
@@ -58,12 +75,16 @@ export class TaskQueue {
     }
     this.running = false;
   }
+
+  private nextTask(): Task | undefined {
+    return this.queue.shift();
+  }
 }
 
 export async function parallelMap<T, U>(
   items: readonly T[],
   limit: number,
-  worker: (item: T, index: number) => Promise<U>
+  worker: WorkerFn<T, U>
 ): Promise<U[]> {
   const sem = new Semaphore(Math.max(1, limit));
   const results: U[] = new Array(items.length);

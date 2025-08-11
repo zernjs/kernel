@@ -1,7 +1,13 @@
+/**
+ * @file Result helpers (Ok/Err) and small combinators.
+ */
+
 export type Ok<T> = { ok: true; value: T };
 export type Err<E> = { ok: false; error: E };
 
 export type Result<T, E = unknown> = Ok<T> | Err<E>;
+
+type MatchHandlers<T, E, U> = { ok: (t: T) => U; err: (e: E) => U };
 
 export function ok<T>(value: T): Ok<T> {
   return { ok: true, value };
@@ -31,10 +37,7 @@ export function andThen<T, E, U>(r: Result<T, E>, fn: (t: T) => Result<U, E>): R
   return isOk(r) ? fn(r.value) : r;
 }
 
-export function match<T, E, U>(
-  r: Result<T, E>,
-  handlers: { ok: (t: T) => U; err: (e: E) => U }
-): U {
+export function match<T, E, U>(r: Result<T, E>, handlers: MatchHandlers<T, E, U>): U {
   return isOk(r) ? handlers.ok(r.value) : handlers.err(r.error);
 }
 
@@ -72,7 +75,7 @@ export async function all<T extends ReadonlyArray<unknown>, E = unknown>(results
 }
 
 export function fromNullable<T, E = unknown>(value: T | null | undefined, error: E): Result<T, E> {
-  return value == null ? err(error) : ok(value);
+  return value == null ? err(error) : ok(value as T);
 }
 
 export function any<T, E>(results: Result<T, E>[]): Result<T, E[]> {

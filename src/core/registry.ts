@@ -1,5 +1,12 @@
+/**
+ * @file In-memory plugin registry with optional user load-order storage.
+ */
 import type { IPluginRegistry, PluginInstance, PluginLoadOrder } from '@types';
 import { hasOwn } from '@utils';
+
+function shouldStoreOrder(order?: PluginLoadOrder): order is PluginLoadOrder {
+  return !!order && (hasOwn(order, 'before') || hasOwn(order, 'after'));
+}
 
 export class PluginRegistry implements IPluginRegistry {
   private readonly plugins = new Map<string, PluginInstance>();
@@ -7,8 +14,7 @@ export class PluginRegistry implements IPluginRegistry {
 
   register(plugin: PluginInstance, order?: PluginLoadOrder): void {
     this.plugins.set(plugin.metadata.name, plugin);
-    if (order && (hasOwn(order, 'before') || hasOwn(order, 'after')))
-      this.loadOrder.set(plugin.metadata.name, order);
+    if (shouldStoreOrder(order)) this.loadOrder.set(plugin.metadata.name, order);
   }
 
   get<T extends PluginInstance = PluginInstance>(name: string): T | null {

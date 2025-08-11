@@ -1,4 +1,10 @@
-export function isObject(value: unknown): value is Record<string, unknown> {
+/**
+ * @file Guard helpers for runtime type narrowing.
+ */
+
+type UnknownRecord = Record<string, unknown>;
+
+export function isObject(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null;
 }
 
@@ -28,10 +34,10 @@ export function assert(condition: unknown, message: string): asserts condition {
 }
 
 export function isPromise<T = unknown>(value: unknown): value is Promise<T> {
-  return isObject(value) && 'then' in value && isFunction(value.then as unknown);
+  return isObject(value) && 'then' in value && isFunction((value as { then?: unknown }).then);
 }
 
-export function isPlainObject(value: unknown): value is Record<string, unknown> {
+export function isPlainObject(value: unknown): value is UnknownRecord {
   if (!isObject(value)) return false;
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;

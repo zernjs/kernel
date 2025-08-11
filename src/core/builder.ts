@@ -1,3 +1,6 @@
+/**
+ * @file Fluent builder for Kernel creation, plugin registration and options.
+ */
 import type {
   KernelOptions,
   PluginInstance,
@@ -8,6 +11,10 @@ import type {
 import type { PluginCtor } from '@plugin/types';
 import { Kernel } from '@core/kernel';
 import { PluginRegistry } from '@core/registry';
+
+function instantiate<T extends PluginInstance>(pluginCtor: new () => T): T {
+  return new pluginCtor();
+}
 
 export class KernelBuilder<
   TPlugins extends Record<string, PluginInstance> = Record<never, never>,
@@ -23,7 +30,7 @@ export class KernelBuilder<
     TPlugins & { [K in InstanceType<Ctor>['metadata']['name']]: InstanceType<Ctor> },
     TAugments & ExtractAugments<InstanceType<Ctor>>
   > {
-    const instance = new pluginCtor();
+    const instance = instantiate(pluginCtor);
     this.registry.register(instance as unknown as PluginInstance, order);
     return this as unknown as KernelBuilder<
       TPlugins & { [K in InstanceType<Ctor>['metadata']['name']]: InstanceType<Ctor> },

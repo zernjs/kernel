@@ -1,3 +1,6 @@
+/**
+ * @file Plugin options validation helpers.
+ */
 export interface OptionsValidator<Schema, Output> {
   readonly schema: Schema;
   parse(input: unknown): Output;
@@ -8,16 +11,26 @@ export interface PluginOptionsSpec<Schema = unknown, Output = unknown> {
   defaultValue?: Output;
 }
 
+function isNil(v: unknown): v is null | undefined {
+  return v === null || v === undefined;
+}
+
+/**
+ * Validates and resolves plugin options using the provided spec.
+ * @param spec Options spec with validator and optional default.
+ * @param input Raw input.
+ * @returns Parsed options or the default value when input is nil.
+ * @throws Error when validation fails.
+ */
 export function validateOptions<Schema, Output>(
   spec: PluginOptionsSpec<Schema, Output> | undefined,
   input: unknown
 ): Output | undefined {
   if (!spec) return undefined;
-  if (input === undefined || input === null) return spec.defaultValue;
+  if (isNil(input)) return spec.defaultValue;
   try {
     return spec.validator.parse(input);
   } catch (e) {
-    // surface a consistent error shape to callers; they may wrap into KernelError upstream
     const err = e as Error;
     throw new Error(`Plugin options validation failed: ${err.message}`);
   }

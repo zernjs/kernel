@@ -1,3 +1,6 @@
+/**
+ * @file Public types for the Alerts layer.
+ */
 export type AlertNamespace = string;
 export type AlertKind = string;
 

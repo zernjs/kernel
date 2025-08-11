@@ -1,3 +1,6 @@
+/**
+ * @file Public types for Events adapters.
+ */
 import type { EventOptions } from '@types';
 
 export interface EventAdapter {
@@ -8,6 +11,11 @@ export interface EventAdapter {
   onEmit?(namespace: string, eventName: string, payload: unknown): void;
 }
 
+/**
+ * Function that composes a single event name from namespace and event name.
+ */
+export type EventNameComposer = (namespace: string, eventName: string) => string;
+
 export interface NodeEventEmitterLike {
   emit(eventName: string, ...args: unknown[]): boolean;
   on(eventName: string, listener: (...args: unknown[]) => void): unknown;
@@ -15,7 +23,7 @@ export interface NodeEventEmitterLike {
 
 export interface NodeEventEmitterAdapterOptions {
   emitter: NodeEventEmitterLike;
-  toEventName?: (namespace: string, eventName: string) => string;
+  toEventName?: EventNameComposer;
 }
 
 export interface RxjsSubjectLike<T = unknown> {
@@ -25,3 +33,8 @@ export interface RxjsSubjectLike<T = unknown> {
 export interface RxjsAdapterOptions<T = unknown> {
   subjectFactory: (namespace: string, eventName: string) => RxjsSubjectLike<T>;
 }
+
+/**
+ * Node EventEmitter adapter type.
+ */
+export type NodeEventEmitterAdapter = EventAdapter & { getEmitter(): NodeEventEmitterLike };

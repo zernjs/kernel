@@ -1,17 +1,18 @@
 import { definePlugin } from '../src/plugin/definePlugin';
 import { createAlerts, defineAlert } from '../src/alerts/alert-bus';
-import { createErrors, defineError } from '../src/errors/error-bus';
+import { defineErrors } from '../src/errors/error-bus';
 import { Database } from './database.plugin';
 
 const alerts = createAlerts('ui', { Info: defineAlert() });
-const errors = createErrors('auth', { InvalidCredentials: defineError() });
+const errors = defineErrors('auth', { InvalidCredentials: (p: { reason: string }) => p });
+const { InvalidCredentials } = errors.factories;
 
 export const Auth = definePlugin({
   name: 'auth',
   version: '1.0.0',
   dependsOn: [Database],
   alerts: { namespace: alerts.namespace, kinds: alerts.kinds },
-  errors: { namespace: errors.namespace, kinds: errors.kinds },
+  errors: errors.spec,
   async setup(ctx): Promise<{
     login: (u: string, p: string) => Promise<boolean>;
   }> {
@@ -22,7 +23,7 @@ export const Auth = definePlugin({
     void db.isConnected();
     return {
       async login(_user: string, _pass: string): Promise<boolean> {
-        await ctx.errors.emit('auth', 'InvalidCredentials', { reason: 'demo' });
+        await ctx.errors.Throw(InvalidCredentials({ reason: 'demo' }));
         return false;
       },
     };

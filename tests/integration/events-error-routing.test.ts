@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createKernel } from '@core/createKernel';
 import { createEvents, event } from '@events/event-bus';
 import { definePlugin } from '@plugin/definePlugin';
+import { defineErrors } from '@errors';
 
 describe('EventBus → ErrorBus routing', () => {
   it('routes handler exceptions to ErrorBus with metadata', async () => {
@@ -18,8 +19,10 @@ describe('EventBus → ErrorBus routing', () => {
 
     const kernel = createKernel().use(P).build();
     const ns = kernel.events.namespace('p');
+    const EventsErrors = defineErrors('events', { HandlerError: (e: unknown) => e });
+    const { HandlerError } = EventsErrors.factories;
     let routed = false;
-    const offErr = kernel.errors.on('events', 'HandlerError', (_e, meta) => {
+    const offErr = kernel.errors.on(HandlerError, (_e, meta) => {
       routed = meta?.namespace === 'p' && meta?.eventName === 'boom';
     });
 

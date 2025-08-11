@@ -1,3 +1,6 @@
+/**
+ * @file Public types for the entire application.
+ */
 export * from '../alerts/types';
 export * from '../core/types';
 export * from '../diagnostics/types';

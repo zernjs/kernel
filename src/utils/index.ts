@@ -1,3 +1,6 @@
+/**
+ * @file Utils public entrypoint.
+ */
 export * from './guards';
 export * from './result';
 export * from './concurrency';

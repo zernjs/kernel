@@ -14,41 +14,43 @@ The Errors layer provides structured error reporting and routing. It includes a 
 See `src/errors/error-bus.ts`.
 
 - `ErrorBus`
-  - `on(namespace, kind, handler) → () => void`
-  - `off(namespace, kind, handler) → void`
-  - `emit(namespace, kind, payload, meta?) → Promise<void>`
+  - `on(factory, handler) → () => void`
+  - `Throw(token, meta?) → Promise<void>` — reporta no bus (não lança)
+  - `Raise(token, meta?) → never` — reporta e lança `ReportedError`
 - Helpers
-  - `defineError()` — marker for declarative error specs
-  - `createErrors(namespace, spec)` — returns `{ namespace, kinds }`
-  - `bindErrors(bus, namespace, spec)` — returns `{ throw, on }` bound to the namespace/kinds for better DX
+  - `defineErrors(namespace, spec)` — unifica declaração + factories tipadas
+  - `createErrorFactory(namespace, kind)` — cria uma factory isolada (baixo nível)
+  - Tipos: `ErrorFactory`, `ErrorToken`, `ReportedError`
 
 ### Example
 
 ```ts
-import { ErrorBus } from '../errors/error-bus';
+import { ErrorBus, defineErrors } from '../errors';
 
 const errors = new ErrorBus();
+const AuthErrors = defineErrors('auth', { InvalidCredentials: (p: { reason: string }) => p });
+const { InvalidCredentials } = AuthErrors.factories;
 
-const off = errors.on('auth', 'InvalidCredentials', (payload, meta) => {
+const off = errors.on(InvalidCredentials, (payload, meta) => {
   // send to log/sentry/etc.
 });
 
-await errors.emit('auth', 'InvalidCredentials', { reason: '...' }, { source: 'custom' });
+await errors.Throw(InvalidCredentials({ reason: '...' }), { source: 'custom' });
 off();
 ```
 
 ### Declarative + helper
 
 ```ts
-import { bindErrors, createErrors, defineError } from '../errors/error-bus';
+import { defineErrors } from '../errors';
 
-const spec = createErrors('auth', { InvalidCredentials: defineError() });
-const authErrors = bindErrors(errors, spec.namespace, { InvalidCredentials: defineError() });
+const Auth = defineErrors('auth', { InvalidCredentials: (p: { reason: string }) => p });
+const { InvalidCredentials } = Auth.factories;
 
-const off = authErrors.on('InvalidCredentials', p => {
+const off = errors.on(InvalidCredentials, p => {
   /* ... */
 });
-await authErrors.throw('InvalidCredentials', { reason: '...' });
+await errors.Throw(InvalidCredentials({ reason: '...' }));
 ```
 
 ## Kernel errors
@@ -79,9 +81,9 @@ try {
 
 ## Integration
 
-- EventBus: handler exceptions are routed to `ErrorBus` namespace `events` with kind `HandlerError`
-- HookBus: handler exceptions are routed to `ErrorBus` namespace `hooks` with kind `HandlerError`
-- Lifecycle: failures are wrapped as `KernelError('LifecyclePhaseFailed')` and also emitted to `ErrorBus` namespace `kernel`
+- EventBus: handler exceptions são encaminhadas via `Throw(Events.HandlerError(...))`
+- HookBus: (reservado) encaminhamento via `Throw(Hooks.HandlerError(...))`
+- Lifecycle: falhas são encapsuladas em `KernelError(...)` e encaminhadas via factories
 
 ## Policies
 

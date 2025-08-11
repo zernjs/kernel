@@ -1,10 +1,16 @@
 /* eslint-disable no-redeclare */
+/**
+ * @file Plugin definition helper with contextual typing for setup(ctx).
+ */
 import type { DepItem, PlainDep, PluginCtor, PluginSpec, InferablePluginSpec } from '@types';
 import { createPluginMetadata, isDetailed } from './descriptors';
 import { PLUGIN_SETUP_SYMBOL } from '@types';
 
-// Overload providing contextual typing for setup(ctx) based on dependsOn
+function toPlainDeps(dependsOn: readonly DepItem[] | undefined): PlainDep[] {
+  return dependsOn ? dependsOn.map(d => (isDetailed(d) ? d.plugin : d)) : [];
+}
 
+// Overload providing contextual typing for setup(ctx) based on dependsOn
 export function definePlugin<
   const Name extends string,
   const Deps extends readonly DepItem[] = readonly DepItem[],
@@ -18,18 +24,13 @@ export function definePlugin<
   const kSetup: typeof PLUGIN_SETUP_SYMBOL = PLUGIN_SETUP_SYMBOL;
   class P {
     public readonly metadata = createPluginMetadata(spec);
-    // exposed for Kernel to call during init
     public readonly [kSetup] = spec.setup;
     public readonly hooks = spec.hooks;
     public readonly events = spec.events;
     public readonly errors = spec.errors;
     public readonly alerts = spec.alerts;
     public readonly augments = spec.augments;
-    // static reference for declaration of deps (fase 1: declaração apenas)
-    static readonly dependsOn: PlainDep[] = spec.dependsOn
-      ? spec.dependsOn.map(d => (isDetailed(d) ? d.plugin : d))
-      : [];
-    // kernel chamará setup e anexará a API — implementação futura no core/kernel
+    static readonly dependsOn: PlainDep[] = toPlainDeps(spec.dependsOn);
   }
   return P as unknown as PluginCtor<
     S['name'],

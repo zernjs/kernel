@@ -1,6 +1,41 @@
+/**
+ * @file Plugin API augmentation helpers (merge and apply augmentations).
+ */
 import type { AugmentationOptions } from '@types';
 import { KernelError } from '@errors';
 import { hasOwn, isObject } from '@utils';
+
+type UnknownRecord = Record<string, unknown>;
+
+function computeNamespacedKey(prefix: string | undefined, key: string): string {
+  const pref = prefix ?? 'aug';
+  return `${pref}.${key}`;
+}
+
+function handleConflict(
+  policy: AugmentationOptions['policy'],
+  out: UnknownRecord,
+  key: string,
+  value: unknown,
+  namespacePrefix?: string
+): boolean {
+  if (policy === 'error') {
+    throw new KernelError('AugmentationConflict', `Augmentation conflict on key '${key}'`, { key });
+  }
+  if (policy === 'namespace') {
+    out[computeNamespacedKey(namespacePrefix, key)] = value;
+    return true;
+  }
+  // policy === 'override' → fallthrough to assign out[key] below
+  return false;
+}
+
+function freezeLeafObjects(out: UnknownRecord): void {
+  for (const k of Object.keys(out)) {
+    const v = out[k];
+    if (isObject(v)) Object.freeze(v);
+  }
+}
 
 export function mergeApis<TBase extends object, TAug extends object>(
   base: TBase,
@@ -8,26 +43,17 @@ export function mergeApis<TBase extends object, TAug extends object>(
   opts: AugmentationOptions = {}
 ): TBase & TAug {
   const policy = opts.policy ?? 'error';
-  const out: Record<string, unknown> = { ...(base as unknown as Record<string, unknown>) };
-  for (const [key, value] of Object.entries(aug as Record<string, unknown>)) {
+  const out: UnknownRecord = { ...(base as unknown as UnknownRecord) };
+
+  for (const [key, value] of Object.entries(aug as UnknownRecord)) {
     if (hasOwn(out, key)) {
-      if (policy === 'error') {
-        throw new KernelError('AugmentationConflict', `Augmentation conflict on key '${key}'`, {
-          key,
-        });
-      } else if (policy === 'namespace') {
-        const pref = opts.namespacePrefix ?? 'aug';
-        out[`${pref}.${key}`] = value;
-        continue;
-      } // override just replaces
+      const skipOverride = handleConflict(policy, out, key, value, opts.namespacePrefix);
+      if (skipOverride) continue;
     }
     out[key] = value;
   }
-  // return a non-frozen merged view; freeze only plain-object leaves to avoid accidental mutation
-  for (const k of Object.keys(out)) {
-    const v = (out as Record<string, unknown>)[k];
-    if (isObject(v)) Object.freeze(v);
-  }
+
+  freezeLeafObjects(out);
   return out as TBase & TAug;
 }
 
