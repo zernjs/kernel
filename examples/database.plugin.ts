@@ -1,4 +1,4 @@
-import { definePlugin } from '../src/plugin/definePlugin';
+import { plugin } from '../src';
 
 export type DatabaseAPI = {
   connect: (dsn: string) => Promise<void>;
@@ -8,7 +8,7 @@ export type DatabaseAPI = {
   backup?: (name: string) => Promise<boolean>;
 };
 
-export const Database = definePlugin({
+export const Database = plugin.definePlugin({
   name: 'database',
   version: '1.0.0',
   async setup(): Promise<DatabaseAPI> {

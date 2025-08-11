@@ -43,12 +43,9 @@ Type-safe plugin runtime with deterministic load order, lifecycle, hooks, events
 ## 🚀 Quick Start
 
 ```ts
-import { createKernel } from './src/core/createKernel';
-import { definePlugin } from './src/plugin/definePlugin';
-import { createEvents, event } from './src/events/event-bus';
-import { createErrors, defineError } from './src/errors/error-bus';
+import { plugin, events, errors, getKernel } from '@zern/kernel';
 
-const Database = definePlugin({
+const Database = plugin.definePlugin({
   name: 'database',
   version: '1.0.0',
   async setup() {
@@ -64,18 +61,18 @@ const Database = definePlugin({
   },
 });
 
-const Auth = definePlugin({
+const Auth = plugin.definePlugin({
   name: 'auth',
   version: '1.0.0',
-  events: createEvents('auth', { login: event() }),
-  errors: createErrors('auth', { InvalidCredentials: defineError() }),
+  events: events.createEvents('auth', { login: events.event() }),
+  errors: errors.defineErrors('auth', { InvalidCredentials: (p: { reason: string }) => p }).spec,
   async setup({ kernel }) {
     await kernel.events.namespace('auth').emit('login', { userId: 'u1' });
     return {};
   },
 });
 
-const kernel = createKernel().use(Database).use(Auth).build();
+const kernel = getKernel().use(Database).use(Auth).build();
 
 await kernel.init();
 ```
@@ -116,22 +113,30 @@ pnpm -w test --filter @zern/kernel
 ## 🔧 Minimal API Reference
 
 - Kernel
-  - `createKernel() → KernelBuilder`
+  - `getKernel() → KernelBuilder` (auto-bootstrapped root builder)
+  - `ensureKernel() → Promise<Kernel>` (build+init once, reuse later)
+  - `withKernel(select) → Promise<T>` (ensure + project value)
   - `builder.use(Plugin, { before?, after?, options? }) → KernelBuilder`
   - `builder.build() → Kernel`
   - `kernel.init()/destroy()`
   - `kernel.get(name)`
 - Plugin
-  - `definePlugin({ name, version, dependsOn?, hooks?, events?, errors?, alerts?, augments?, setup(ctx) { return API } })`
+  - `plugin.definePlugin({ name, version, dependsOn?, hooks?, events?, errors?, alerts?, augments?, setup(ctx) { return API } })`
   - `ctx.extend(target, api)` to programmatically augment other plugins
 - Hooks
+  - `useHooks() → Promise<Kernel['hooks']>`
   - `kernel.hooks.define(name).on/emit/once`
 - Events
+  - `useEvents() → Promise<Kernel['events']>`
+  - `emitEvent(ns, name, payload)` convenience
   - `kernel.events.namespace(ns).define(event, opts).on/emit/once`
   - Delivery: `sync|microtask|async`; Startup: `drop|buffer|sticky`
   - Middlewares: global/namespace/event-level `use(mw)`
 - Errors/Alerts
-  - `ErrorBus`/`AlertBus` with `.on/.off/.emit`, plus `bindErrors/bindAlerts` helpers
+  - `useErrors()/useAlerts()`; `ErrorBus`/`AlertBus` with `.on/.off/.emit`
+
+> Power users can still import advanced pieces directly via namespaces:
+> `import { core, plugin, events, errors } from '@zern/kernel'`.
 
 For full details, see the docs in `./docs/`.
 

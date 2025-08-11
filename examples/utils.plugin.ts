@@ -1,11 +1,11 @@
-import { definePlugin } from '../src/plugin/definePlugin';
+import { plugin } from '../src';
 import { Database } from './database.plugin';
 
 export type UtilsAPI = {
   formatDate: (d: Date) => string;
 };
 
-export const Utils = definePlugin({
+export const Utils = plugin.definePlugin({
   name: 'utils',
   version: '1.0.0',
   dependsOn: [Database],

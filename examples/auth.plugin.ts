@@ -1,18 +1,16 @@
-import { definePlugin } from '../src/plugin/definePlugin';
-import { createAlerts, defineAlert } from '../src/alerts/alert-bus';
-import { defineErrors } from '../src/errors/error-bus';
+import { plugin, alerts, errors } from '../src';
 import { Database } from './database.plugin';
 
-const alerts = createAlerts('ui', { Info: defineAlert() });
-const errors = defineErrors('auth', { InvalidCredentials: (p: { reason: string }) => p });
-const { InvalidCredentials } = errors.factories;
+const ui = alerts.createAlerts('ui', { Info: alerts.defineAlert() });
+const err = errors.defineErrors('auth', { InvalidCredentials: (p: { reason: string }) => p });
+const { InvalidCredentials } = err.factories;
 
-export const Auth = definePlugin({
+export const Auth = plugin.definePlugin({
   name: 'auth',
   version: '1.0.0',
   dependsOn: [Database],
-  alerts: { namespace: alerts.namespace, kinds: alerts.kinds },
-  errors: errors.spec,
+  alerts: { namespace: ui.namespace, kinds: ui.kinds },
+  errors: err.spec,
   async setup(ctx): Promise<{
     login: (u: string, p: string) => Promise<boolean>;
   }> {

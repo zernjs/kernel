@@ -17,6 +17,31 @@ The kernel focuses on the foundation only — composition, lifecycle, ordering, 
 
 ## Quick Start
 
+Use the consolidated entrypoint `@zern/kernel` instead of per-file imports. The root exposes all layers and DX helpers that initialize the Kernel automatically when needed.
+
+```ts
+import { plugin, events, errors, getKernel, useEvents, emitEvent } from '@zern/kernel';
+
+const Auth = plugin.definePlugin({
+  name: 'auth',
+  version: '1.0.0',
+  events: events.createEvents('auth', { login: events.event() }),
+  errors: errors.defineErrors('auth', { InvalidCredentials: (p: { reason: string }) => p }).spec,
+  async setup({ kernel }) {
+    await kernel.events.namespace('auth').emit('login', { userId: 'u1' });
+    return {};
+  },
+});
+
+const kernel = getKernel().use(Auth).build();
+await kernel.init();
+
+// DX helpers
+const ev = await useEvents();
+await ev.namespace('auth').emit('login', { userId: 'u2' });
+await emitEvent('auth', 'login', { userId: 'u3' });
+```
+
 See the package `README.md` for a concise Quick Start and minimal API reference. Then deep-dive into the docs below to learn each layer.
 
 ## Documentation map

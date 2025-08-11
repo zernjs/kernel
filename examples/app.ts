@@ -1,10 +1,10 @@
-import { createKernel } from '../src/core/createKernel';
+import { getKernel } from '../src';
 import { Database } from './database.plugin';
 import { Utils } from './utils.plugin';
 import { Auth } from './auth.plugin';
 
 async function main(): Promise<void> {
-  const kernel = createKernel()
+  const kernel = getKernel()
     .use(Database)
     .use(Utils, { after: ['database'] })
     .use(Auth)
