@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   test:
@@ -48,12 +49,13 @@ jobs:
           mkdir -p artifacts
           npm pack --pack-destination ./artifacts
 
-      - name: Upload package tarball artifact
+      - name: Upload package tarball artifact (retained)
         uses: actions/upload-artifact@v4
         with:
           name: package-tarball
           path: artifacts/*.tgz
           if-no-files-found: error
+          retention-days: 7
 
       - name: Generate coverage badges
         run: npx --yes coverage-badges --source coverage/coverage-summary.json --output coverage/badges.svg || true
