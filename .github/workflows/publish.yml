@@ -70,4 +70,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
-          npm publish artifacts/*.tgz --access public
+          set -euo pipefail
+          FILE=$(ls ./artifacts/*.tgz)
+          echo "Publishing $FILE"
+          npm publish "$FILE" --access public
