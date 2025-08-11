@@ -42,6 +42,7 @@ jobs:
           path: ./artifacts
           repository: ${{ github.repository }}
           run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check if local version is greater than published
         id: version
