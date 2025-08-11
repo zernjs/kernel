@@ -17,13 +17,16 @@ export interface AugmentationOptions {
 
 import type { PluginOptionsSpec } from './options';
 import type { Kernel } from '../core/kernel';
-import type { TypedEvents } from '../events/types';
+import type { TypedEvents, GlobalEventMap } from '../events/types';
 import type { PluginInstance } from '../core/types';
 import type { HookBus } from '../hooks/hook-bus';
 import type { EventBus } from '../events/event-bus';
 import type { EventDef } from '../events/types';
 import type { ErrorBus } from '../errors/error-bus';
-import type { AlertBus } from '../alerts/alert-bus';
+// Intentionally not importing AlertBus here to avoid unused warnings
+import type { AlertDef } from '../alerts/types';
+import type { HookDef } from '../hooks/types';
+import type { TypedAlerts, GlobalAlertMap } from '../alerts/types';
 
 export interface PluginSpec<
   Name extends string = string,
@@ -38,10 +41,10 @@ export interface PluginSpec<
   dependsOn?: Deps;
   loadBefore?: readonly string[];
   loadAfter?: readonly string[];
-  hooks?: Record<string, { on: unknown; off: unknown; emit: unknown; once: unknown }>;
+  hooks?: { namespace: string; spec: Record<string, HookDef> };
   events?: { namespace: string; spec: Record<string, EventDef> };
   errors?: { namespace: string; kinds: readonly string[] };
-  alerts?: { namespace: string; kinds: readonly string[] };
+  alerts?: { namespace: string; spec: Record<string, AlertDef> };
   augments?: Aug;
   setup(ctx: SetupContext<NonNullable<Deps>>, options?: unknown): API | Promise<API>;
 }
@@ -51,11 +54,15 @@ export type PluginCtor<
   API extends object,
   Aug extends Record<string, object> = Record<string, object>,
   Evt extends { namespace: string; spec: Record<string, EventDef> } | undefined = undefined,
+  Alrt extends
+    | { namespace: string; spec: Record<string, import('../alerts/types').AlertDef> }
+    | undefined = undefined,
 > = new () => PluginInstance & {
   metadata: { name: Name; version: string; description?: string };
   augments?: Aug;
 } & API &
-  (Evt extends undefined ? object : { events: Evt });
+  (Evt extends undefined ? object : { events: Evt }) &
+  (Alrt extends undefined ? object : { alerts: Alrt });
 
 export type PlainDep = PluginCtor<string, object>;
 export type DetailedDep = {
@@ -85,11 +92,13 @@ export type DependenciesContext<Deps extends readonly DepItem[]> = {
 };
 
 export interface BaseSetupContext {
-  kernel: Kernel<Record<string, PluginInstance>>;
+  kernel: Kernel<Record<string, PluginInstance>> & {
+    events: TypedEvents<GlobalEventMap>;
+    alerts: TypedAlerts<GlobalAlertMap>;
+  };
   hooks: HookBus;
   events: EventBus & TypedEvents<Record<string, Record<string, EventDef>>>;
   errors: ErrorBus;
-  alerts: AlertBus;
   extend?: (target: string, api: Record<string, unknown>) => void;
 }
 
@@ -118,6 +127,17 @@ export type InferablePluginSpec<
 export type ExtractEvents<T> = T extends { events?: { namespace: infer N; spec: infer S } }
   ? N extends string
     ? S extends Record<string, EventDef>
+      ? { [K in N]: S }
+      : Record<string, never>
+    : Record<string, never>
+  : Record<string, never>;
+
+/**
+ * Extracts an alert namespace→spec map from a Plugin instance type.
+ */
+export type ExtractAlerts<T> = T extends { alerts?: { namespace: infer N; spec: infer S } }
+  ? N extends string
+    ? S extends Record<string, AlertDef>
       ? { [K in N]: S }
       : Record<string, never>
     : Record<string, never>

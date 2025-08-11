@@ -27,8 +27,11 @@ export * as utils from './utils';
 
 import { createKernel } from './core/createKernel';
 import type { Kernel } from './core/kernel';
-import type { TypedEvents, GlobalEventMap } from './events/types';
+import type { TypedEvents, GlobalEventMap } from '@events/types';
 import { bindEvents } from './events/event-bus';
+import { bindAlerts, AlertBus, createAlerts } from './alerts/alert-bus';
+import type { IAlertBus, TypedAlerts as TypedAlertsAlerts, GlobalAlertMap } from '@alerts/types';
+import { bindHooks, HookBus } from './hooks/hook-bus';
 import type { EventBus } from './events/event-bus';
 import type { event as eventFactory } from './events/event-bus';
 
@@ -159,13 +162,53 @@ export async function useEvents<
 }
 /* eslint-enable no-redeclare */
 
+/* eslint-disable no-redeclare */
 /**
- * Get the Hooks bus from the global Kernel.
- * @returns Kernel.hooks
+ * Get the Hooks bus from the global Kernel, or bind a typed descriptor.
  */
-export async function useHooks(): Promise<Kernel['hooks']> {
-  return await withKernel(k => k.hooks);
+export async function useHooks(): Promise<Kernel['hooks']>;
+export async function useHooks<
+  TSpec extends Record<string, ReturnType<typeof import('./hooks/hook-bus').defineHook<unknown>>>,
+>(descriptor: {
+  namespace: string;
+  spec: TSpec;
+}): Promise<{
+  emit: <K extends keyof TSpec & string>(
+    name: K,
+    payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
+  ) => Promise<void>;
+  on: <K extends keyof TSpec & string>(
+    name: K,
+    handler: (
+      payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
+    ) => void | Promise<void>
+  ) => () => void;
+}>;
+export async function useHooks<
+  TSpec extends Record<string, ReturnType<typeof import('./hooks/hook-bus').defineHook<unknown>>>,
+>(descriptor?: {
+  namespace: string;
+  spec: TSpec;
+}): Promise<
+  | Kernel['hooks']
+  | {
+      emit: <K extends keyof TSpec & string>(
+        name: K,
+        payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
+      ) => Promise<void>;
+      on: <K extends keyof TSpec & string>(
+        name: K,
+        handler: (
+          payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
+        ) => void | Promise<void>
+      ) => () => void;
+    }
+> {
+  const k = await withKernel(kernel => kernel);
+  if (descriptor) return bindHooks(k.hooks as unknown as HookBus, descriptor);
+  return k.hooks;
 }
+/* eslint-enable no-redeclare */
 
 /**
  * Get the ErrorBus from the global Kernel.
@@ -179,9 +222,40 @@ export async function useErrors(): Promise<Kernel['errors']> {
  * Get the AlertBus from the global Kernel.
  * @returns Kernel.alerts
  */
-export async function useAlerts(): Promise<Kernel['alerts']> {
-  return await withKernel(k => k.alerts);
+/* eslint-disable no-redeclare */
+export async function useAlerts(): Promise<TypedAlertsAlerts<GlobalAlertMap>>;
+export async function useAlerts<
+  TSpec extends Record<string, ReturnType<typeof createAlerts>['spec'][string]>,
+>(descriptor: {
+  namespace: string;
+  spec: TSpec;
+}): Promise<{
+  emit: <K extends keyof TSpec & string, P = unknown>(kind: K, payload: P) => Promise<void>;
+  on: <K extends keyof TSpec & string, P = unknown>(
+    kind: K,
+    handler: (payload: P) => void | Promise<void>
+  ) => () => void;
+}>;
+export async function useAlerts<
+  TSpec extends Record<string, ReturnType<typeof createAlerts>['spec'][string]>,
+>(descriptor?: {
+  namespace: string;
+  spec: TSpec;
+}): Promise<
+  | TypedAlertsAlerts<GlobalAlertMap>
+  | {
+      emit: <K extends keyof TSpec & string, P = unknown>(kind: K, payload: P) => Promise<void>;
+      on: <K extends keyof TSpec & string, P = unknown>(
+        kind: K,
+        handler: (payload: P) => void | Promise<void>
+      ) => () => void;
+    }
+> {
+  const k = await withKernel(kernel => kernel);
+  if (descriptor) return bindAlerts(k.alerts as unknown as AlertBus, descriptor);
+  return k.alerts as unknown as TypedAlertsAlerts<GlobalAlertMap>;
 }
+/* eslint-enable no-redeclare */
 
 /** Convenience one-liners */
 /**
@@ -212,4 +286,16 @@ export async function emitHook<Payload>(name: string, payload: Payload): Promise
   const hb = await useHooks();
   const hk = hb.define<Payload>(name as string);
   await hk.emit(payload);
+}
+
+/**
+ * Emit an alert through the global Kernel's Alerts bus.
+ */
+export async function emitAlert<Payload>(
+  namespace: string,
+  kind: string,
+  payload: Payload
+): Promise<void> {
+  const ab = (await useAlerts()) as unknown as IAlertBus;
+  await ab.emit(namespace, kind, payload);
 }

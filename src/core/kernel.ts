@@ -11,6 +11,8 @@ import { LifecycleEngine, LifecycleEvents } from '@lifecycle';
 import { HookBus } from '@hooks';
 import { EventBus } from '@events';
 import type { EventDef, TypedEvents } from '@types';
+import type { AlertDef } from '@alerts/types';
+import type { TypedAlerts as TypedAlertsAlerts } from '@alerts/types';
 import { createNodeEventEmitterAdapter } from '@events/adapters';
 import { createRxjsAdapter } from '@events/adapters';
 import { ErrorBus, isKernelError, defineErrors, createErrorFactory } from '@errors';
@@ -34,6 +36,7 @@ export class Kernel<
   TPlugins extends Record<string, PluginInstance> = Record<never, never>,
   TAugments extends Record<string, object> = Record<never, never>,
   TEventMap extends Record<string, Record<string, EventDef>> = Record<never, never>,
+  TAlertMap extends Record<string, Record<string, AlertDef>> = Record<never, never>,
 > {
   public readonly plugins: PluginAccessor<ApplyAugmentsToPlugins<TPlugins, TAugments>>;
   private readonly registry: PluginRegistry;
@@ -44,7 +47,8 @@ export class Kernel<
   public readonly events: TypedEvents<TEventMap> =
     new EventBus() as unknown as TypedEvents<TEventMap>;
   public readonly errors = new ErrorBus();
-  public readonly alerts = new AlertBus();
+  public readonly alerts: AlertBus & TypedAlertsAlerts<TAlertMap> =
+    new AlertBus() as unknown as AlertBus & TypedAlertsAlerts<TAlertMap>;
 
   get loadedPlugins(): readonly string[] {
     return this._loadedPlugins;
@@ -180,14 +184,13 @@ export class Kernel<
       }
 
       const pluginAlerts = (
-        p as unknown as { alerts?: { namespace: string; kinds: readonly string[] } }
+        p as unknown as { alerts?: { namespace: string; spec: Record<string, AlertDef> } }
       ).alerts;
       if (pluginAlerts) {
-        bindAlerts(
-          this.alerts,
-          pluginAlerts.namespace,
-          Object.fromEntries(pluginAlerts.kinds.map(k => [k, { __type: 'alert-def' } as const]))
-        );
+        bindAlerts(this.alerts as unknown as AlertBus, {
+          namespace: pluginAlerts.namespace,
+          spec: pluginAlerts.spec,
+        });
       }
     }
     // cast events to a typed view if any specs were declared
@@ -241,11 +244,11 @@ export class Kernel<
     p: PluginInstance,
     extend: (target: string, api: Record<string, unknown>) => void
   ): {
-    kernel: Kernel<TPlugins, TAugments, TEventMap>;
+    kernel: Kernel<TPlugins, TAugments, TEventMap, TAlertMap>;
     hooks: HookBus;
     events: TypedEvents<TEventMap>;
     errors: ErrorBus;
-    alerts: AlertBus;
+    alerts: AlertBus & TypedAlertsAlerts<TAlertMap>;
     plugins: Record<string, unknown>;
     use: (name: string) => unknown;
     extend: (target: string, api: Record<string, unknown>) => void;

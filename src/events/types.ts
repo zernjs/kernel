@@ -135,13 +135,15 @@ export type TypedEvents<TMap extends Record<string, Record<string, EventDef>>> =
   /** Property-based access with full autocomplete of namespaces */
   ns: { [K in keyof TMap & string]: NamespaceApiTyped<TMap[K]> };
   /** Global flat API: keys like "namespace.event" */
-  on: <K extends JoinNsEvent<TMap>>(
-    key: K,
-    handler: (payload: PayloadOfKey<TMap, Extract<K, string>>) => void | Promise<void>
+  on: (
+    key: JoinNsEvent<TMap>,
+    handler: (
+      payload: PayloadOfKey<TMap, Extract<JoinNsEvent<TMap>, string>>
+    ) => void | Promise<void>
   ) => () => void;
-  emit: <K extends JoinNsEvent<TMap>>(
-    key: K,
-    payload: PayloadOfKey<TMap, Extract<K, string>>
+  emit: (
+    key: JoinNsEvent<TMap>,
+    payload: PayloadOfKey<TMap, Extract<JoinNsEvent<TMap>, string>>
   ) => Promise<void>;
 };
 

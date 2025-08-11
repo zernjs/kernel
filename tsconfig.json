@@ -12,6 +12,8 @@
     "declarationMap": true,
     "skipLibCheck": true,
     "baseUrl": ".",
+    "typeRoots": ["./src/types", "./node_modules/@types"],
+    "types": ["node"],
     "paths": {
       "@/*": ["src/*"],
       "@tests/*": ["tests/*"],
@@ -37,8 +39,18 @@
       "@types": ["src/types"],
       "@utils/*": ["src/utils/*"],
       "@utils": ["src/utils"]
-    }
+    },
+    "plugins": [{ "name": "./tools/ts-ls-plugin", "patterns": ["**/*.plugin.ts"] }]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "tests/**/*.ts", "examples/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.d.ts",
+    "tests/**/*.ts",
+    "examples/**/*.ts",
+    "examples/**/*.d.ts",
+    "generated/**/*.d.ts",
+    "tsup.config.ts"
+  ],
   "exclude": ["dist", "node_modules"]
 }

@@ -1,0 +1,63 @@
+name: Publish to npm
+
+on:
+  workflow_run:
+    workflows: ['CI/CD Pipeline']
+    types: [completed]
+
+jobs:
+  publish:
+    name: Publish to npm (if version increased)
+    runs-on: ubuntu-latest
+    if: >
+      ${{ github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.head_branch == 'main' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js (npm registry)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Download package tarball from CI
+        uses: actions/download-artifact@v4
+        with:
+          name: package-tarball
+          path: ./artifacts
+
+      - name: Check if local version is greater than published
+        id: version
+        shell: bash
+        run: |
+          NAME=$(tar -xOf artifacts/*.tgz package/package.json | node -p "JSON.parse(fs.readFileSync(0,'utf8')).name")
+          LOCAL=$(tar -xOf artifacts/*.tgz package/package.json | node -p "JSON.parse(fs.readFileSync(0,'utf8')).version")
+          REMOTE=$(npm view "$NAME" version || echo "0.0.0")
+          echo "Local:  $LOCAL"
+          echo "Remote: $REMOTE"
+          if [ "$LOCAL" = "$REMOTE" ]; then
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          TOP=$(printf '%s\n%s\n' "$REMOTE" "$LOCAL" | sort -V | tail -n1)
+          if [ "$TOP" = "$LOCAL" ] && [ "$LOCAL" != "$REMOTE" ]; then
+            echo "should_publish=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_publish=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to npm from tarball
+        if: steps.version.outputs.should_publish == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
+          npm publish artifacts/*.tgz --access public

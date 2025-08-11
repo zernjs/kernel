@@ -18,6 +18,50 @@ import { ReportedError } from '@types';
  */
 export class ErrorBus {
   private readonly handlers: ErrorHandlersByNamespace = new Map();
+  private readonly globalMiddlewares: Array<
+    (
+      ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+      next: () => Promise<void>
+    ) => Promise<void> | void
+  > = [];
+  private readonly namespaceMiddlewares = new Map<string, typeof this.globalMiddlewares>();
+  private readonly kindMiddlewares = new Map<string, typeof this.globalMiddlewares>();
+  private isReady = false;
+
+  public readonly ns: Record<
+    string,
+    {
+      define: <P, K extends string>(
+        kind: K
+      ) => {
+        on: (handler: ErrorHandler<P>) => () => void;
+        throw: (payload: P, meta?: ErrorMeta) => Promise<void>;
+        raise: (payload: P, meta?: ErrorMeta) => Promise<never>;
+        use: (
+          mw: (
+            ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+            next: () => Promise<void>
+          ) => Promise<void> | void
+        ) => void;
+      };
+      get: <P>(kind: string) =>
+        | {
+            on: (h: ErrorHandler<P>) => () => void;
+            throw: (p: P, m?: ErrorMeta) => Promise<void>;
+            raise: (p: P, m?: ErrorMeta) => Promise<never>;
+          }
+        | undefined;
+      on: <P>(kind: string, handler: ErrorHandler<P>) => () => void;
+      throw: <P>(kind: string, payload: P, meta?: ErrorMeta) => Promise<void>;
+      raise: <P>(kind: string, payload: P, meta?: ErrorMeta) => Promise<never>;
+      use: (
+        mw: (
+          ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+          next: () => Promise<void>
+        ) => Promise<void> | void
+      ) => void;
+    }
+  > = new Proxy({}, { get: (_t, prop: string) => this.namespace(prop) });
 
   /**
    * Subscribe to a specific error factory (namespace+kind) with typed payload.
@@ -85,7 +129,14 @@ export class ErrorBus {
    * @returns Promise resolved after all handlers run.
    */
   async Throw<Payload>(token: ErrorToken<Payload>, meta?: ErrorMeta): Promise<void> {
-    await this.dispatchToHandlers<Payload>(token.namespace, token.kind, token.payload, meta);
+    const mws = this.collectMiddlewares(token.namespace, token.kind);
+    await this.runMiddlewareChain(
+      mws,
+      { namespace: token.namespace, kind: token.kind, payload: token.payload, meta },
+      async () => {
+        await this.dispatchToHandlers<Payload>(token.namespace, token.kind, token.payload, meta);
+      }
+    );
   }
 
   /**
@@ -96,9 +147,196 @@ export class ErrorBus {
    * @returns Never; always throws `ReportedError`.
    */
   async Raise<Payload>(token: ErrorToken<Payload>, meta?: ErrorMeta): Promise<never> {
-    await this.dispatchToHandlers<Payload>(token.namespace, token.kind, token.payload, meta);
+    const mws = this.collectMiddlewares(token.namespace, token.kind);
+    await this.runMiddlewareChain(
+      mws,
+      { namespace: token.namespace, kind: token.kind, payload: token.payload, meta },
+      async () => {
+        await this.dispatchToHandlers<Payload>(token.namespace, token.kind, token.payload, meta);
+      }
+    );
     throw new ReportedError<Payload>(token.namespace, token.kind, token.payload, meta);
   }
+
+  start(): void {
+    if (this.isReady) return;
+    this.isReady = true;
+  }
+
+  use(
+    mw: (
+      ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+      next: () => Promise<void>
+    ) => Promise<void> | void
+  ): void {
+    this.globalMiddlewares.push(mw);
+  }
+
+  namespace(namespaceName: string): {
+    define: <P, K extends string>(
+      kind: K
+    ) => {
+      on: (handler: ErrorHandler<P>) => () => void;
+      throw: (payload: P, meta?: ErrorMeta) => Promise<void>;
+      raise: (payload: P, meta?: ErrorMeta) => Promise<never>;
+      use: (
+        mw: (
+          ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+          next: () => Promise<void>
+        ) => Promise<void> | void
+      ) => void;
+    };
+    get: <P>(kind: string) =>
+      | {
+          on: (h: ErrorHandler<P>) => () => void;
+          throw: (p: P, m?: ErrorMeta) => Promise<void>;
+          raise: (p: P, m?: ErrorMeta) => Promise<never>;
+        }
+      | undefined;
+    on: <P>(kind: string, handler: ErrorHandler<P>) => () => void;
+    throw: <P>(kind: string, payload: P, meta?: ErrorMeta) => Promise<void>;
+    raise: <P>(kind: string, payload: P, meta?: ErrorMeta) => Promise<never>;
+    use: (
+      mw: (
+        ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+        next: () => Promise<void>
+      ) => Promise<void> | void
+    ) => void;
+  } {
+    const define = <P, K extends string>(
+      kind: K
+    ): {
+      on: (handler: ErrorHandler<P>) => () => void;
+      throw: (payload: P, meta?: ErrorMeta) => Promise<void>;
+      raise: (payload: P, meta?: ErrorMeta) => Promise<never>;
+      use: (
+        mw: (
+          ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+          next: () => Promise<void>
+        ) => Promise<void> | void
+      ) => void;
+    } => {
+      const factory = createErrorFactory<P, K>(namespaceName, kind);
+      return {
+        on: (handler: ErrorHandler<P>): (() => void) => this.on<P>(factory, handler),
+        throw: async (payload: P, meta?: ErrorMeta): Promise<void> =>
+          this.Throw<P>(factory(payload), meta),
+        raise: async (payload: P, meta?: ErrorMeta): Promise<never> =>
+          this.Raise<P>(factory(payload), meta),
+        use: (
+          mw: (
+            ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+            next: () => Promise<void>
+          ) => Promise<void> | void
+        ): void => this.addKindMiddleware(namespaceName, String(kind), mw),
+      } as const;
+    };
+    return {
+      define,
+      get: <P>(kind: string) => ({
+        on: (h: ErrorHandler<P>) =>
+          this.on<P>(createErrorFactory<P, string>(namespaceName, kind), h),
+        throw: (p: P, m?: ErrorMeta) =>
+          this.Throw<P>(createErrorFactory<P, string>(namespaceName, kind)(p), m),
+        raise: (p: P, m?: ErrorMeta) =>
+          this.Raise<P>(createErrorFactory<P, string>(namespaceName, kind)(p), m),
+      }),
+      on: <P>(kind: string, handler: ErrorHandler<P>): (() => void) =>
+        this.on<P>(createErrorFactory<P, string>(namespaceName, kind), handler),
+      throw: async <P>(kind: string, payload: P, meta?: ErrorMeta): Promise<void> =>
+        this.Throw<P>(createErrorFactory<P, string>(namespaceName, kind)(payload), meta),
+      raise: async <P>(kind: string, payload: P, meta?: ErrorMeta): Promise<never> =>
+        this.Raise<P>(createErrorFactory<P, string>(namespaceName, kind)(payload), meta),
+      use: (
+        mw: (
+          ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+          next: () => Promise<void>
+        ) => Promise<void> | void
+      ): void => this.addNamespaceMiddleware(namespaceName, mw),
+    } as const;
+  }
+
+  private addNamespaceMiddleware(
+    namespace: string,
+    mw: (
+      ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+      next: () => Promise<void>
+    ) => Promise<void> | void
+  ): void {
+    const arr = this.namespaceMiddlewares.get(namespace) ?? [];
+    arr.push(mw);
+    this.namespaceMiddlewares.set(namespace, arr);
+  }
+
+  private addKindMiddleware(
+    namespace: string,
+    kind: string,
+    mw: (
+      ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+      next: () => Promise<void>
+    ) => Promise<void> | void
+  ): void {
+    const key = `${namespace}:${kind}`;
+    const arr = this.kindMiddlewares.get(key) ?? [];
+    arr.push(mw);
+    this.kindMiddlewares.set(key, arr);
+  }
+
+  private collectMiddlewares(
+    namespace: string,
+    kind: string
+  ): Array<
+    (
+      ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+      next: () => Promise<void>
+    ) => Promise<void> | void
+  > {
+    const key = `${namespace}:${kind}`;
+    return [
+      ...this.globalMiddlewares,
+      ...(this.namespaceMiddlewares.get(namespace) ?? []),
+      ...(this.kindMiddlewares.get(key) ?? []),
+    ];
+  }
+
+  private async runMiddlewareChain(
+    middlewares: Array<
+      (
+        ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+        next: () => Promise<void>
+      ) => Promise<void> | void
+    >,
+    ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
+    final: () => Promise<void>
+  ): Promise<void> {
+    let idx = -1;
+    const next = async (): Promise<void> => {
+      idx += 1;
+      if (idx < middlewares.length) await middlewares[idx](ctx, next);
+      else await final();
+    };
+    await next();
+  }
+}
+
+/**
+ * Bind helpers scoped to a defined errors descriptor (DX parity with events/alerts bindings).
+ */
+export function bindErrors<T extends Record<string, unknown>>(
+  bus: ErrorBus,
+  defined: DefinedErrors<T, string>
+): {
+  on: <K extends keyof T & string>(kind: K, handler: ErrorHandler<T[K]>) => () => void;
+  throw: <K extends keyof T & string>(kind: K, payload: T[K], meta?: ErrorMeta) => Promise<void>;
+  raise: <K extends keyof T & string>(kind: K, payload: T[K], meta?: ErrorMeta) => Promise<never>;
+} {
+  const { namespace } = defined.spec;
+  const ns = bus.namespace(namespace);
+  return {
+    on: (kind, handler) => ns.on(kind as string, handler as ErrorHandler<unknown>),
+    throw: async (kind, payload, meta) => ns.throw(kind as string, payload, meta),
+    raise: async (kind, payload, meta) => ns.raise(kind as string, payload, meta),
+  } as const;
 }
 
 /**

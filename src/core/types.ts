@@ -2,7 +2,8 @@
  * @file Public types for the Core layer.
  */
 
-import type { ConflictPolicy, EventAdapter, RxjsSubjectLike } from '@types';
+import type { ConflictPolicy } from '@types';
+import type { EventAdapter, RxjsSubjectLike } from '../events/adapters/types';
 
 /** -------------------------
  * Domain types (stable codes)
@@ -98,7 +99,7 @@ export interface DeclaredErrors {
 }
 
 export interface DeclaredAlerts {
-  alerts?: { namespace: string; kinds: readonly string[] };
+  alerts?: { namespace: string; spec: Record<string, { __type: 'alert-def' }> };
 }
 
 /** -------------------------
