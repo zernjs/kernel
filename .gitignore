@@ -48,12 +48,14 @@ pids/
 *.pid.lock
 
 # Coverage directory used by tools like istanbul
-coverage/
 *.lcov
 
 # Allow coverage badges to be committed
-!**/coverage/badges.json
-!**/coverage/README.md
+coverage/*
+!coverage/badges.json
+!coverage/README.md
+!coverage/coverage-endpoint.json
+!coverage/coverage-summary.json
 
 # nyc test coverage
 .nyc_output/

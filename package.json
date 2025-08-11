@@ -24,6 +24,7 @@
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "test:coverage:watch": "vitest --coverage --watch",
+    "coverage:endpoint": "node scripts/coverage-endpoint.mjs",
     "type-check": "tsc --noEmit",
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",

@@ -46,8 +46,7 @@ jobs:
         run: npx --yes coverage-badges --source coverage/coverage-summary.json --output coverage/badges.svg || true
 
       - name: Generate shields endpoint (coverage)
-        run: |
-          node -e "const fs=require('fs');const p='coverage/coverage-summary.json';if(fs.existsSync(p)){const s=JSON.parse(fs.readFileSync(p,'utf8'));const pct=Number((((s.total||{}).statements||{}).pct||0).toFixed(2));const color=pct<60?'red':pct<80?'yellow':'brightgreen';const out={schemaVersion:1,label:'coverage',message:String(pct)+'%',color};fs.writeFileSync('coverage/coverage-endpoint.json',JSON.stringify(out));}" || true
+        run: pnpm coverage:endpoint || true
 
       - name: Upload coverage artifacts (including badges)
         uses: actions/upload-artifact@v4
