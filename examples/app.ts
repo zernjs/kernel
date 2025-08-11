@@ -18,6 +18,11 @@ async function main(): Promise<void> {
   // Augmented method should appear as native after init
   await db.backup('daily');
 
+  const event = await useEvents();
+  event.on('auth.login', p => {
+    const utils = kernel.plugins.utils;
+    utils.log(`(flat) User logged in: ${p.userId}`);
+  });
   // Subscribe to typed events using the descriptor with automatic binding via useEvents
   const authEvents = await useEvents(AuthEvents);
   authEvents.on('login', p => {

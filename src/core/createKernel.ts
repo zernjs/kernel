@@ -3,6 +3,7 @@
  */
 import { KernelBuilder } from '@core/builder';
 import type { PluginInstance } from '@types';
+import type { EventDef } from '@events/types';
 export { Kernel } from '@core/kernel';
 
 /**
@@ -12,8 +13,9 @@ export { Kernel } from '@core/kernel';
 export function createKernel<
   TPlugins extends Record<string, PluginInstance> = Record<never, never>,
   TAugments extends Record<string, object> = Record<never, never>,
->(): KernelBuilder<TPlugins, TAugments> {
-  return new KernelBuilder<TPlugins, TAugments>();
+  TEventMap extends Record<string, Record<string, EventDef>> = Record<never, never>,
+>(): KernelBuilder<TPlugins, TAugments, TEventMap> {
+  return new KernelBuilder<TPlugins, TAugments, TEventMap>();
 }
 
 export { KernelBuilder };

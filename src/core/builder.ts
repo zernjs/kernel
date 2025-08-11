@@ -11,6 +11,8 @@ import type {
 import type { PluginCtor } from '@plugin/types';
 import { Kernel } from '@core/kernel';
 import { PluginRegistry } from '@core/registry';
+import type { ExtractEvents } from '@plugin/types';
+import type { EventDef } from '@events/types';
 
 function instantiate<T extends PluginInstance>(pluginCtor: new () => T): T {
   return new pluginCtor();
@@ -19,22 +21,32 @@ function instantiate<T extends PluginInstance>(pluginCtor: new () => T): T {
 export class KernelBuilder<
   TPlugins extends Record<string, PluginInstance> = Record<never, never>,
   TAugments extends Record<string, object> = Record<never, never>,
+  TEventMap extends Record<string, Record<string, EventDef>> = Record<never, never>,
 > {
   private readonly registry = new PluginRegistry();
   private options: KernelOptions | undefined;
 
-  use<Ctor extends PluginCtor<string, object>>(
+  use<
+    Ctor extends PluginCtor<
+      string,
+      object,
+      Record<string, object>,
+      { namespace: string; spec: Record<string, EventDef> } | undefined
+    >,
+  >(
     pluginCtor: Ctor,
     order?: UseOrder
   ): KernelBuilder<
     TPlugins & { [K in InstanceType<Ctor>['metadata']['name']]: InstanceType<Ctor> },
-    TAugments & ExtractAugments<InstanceType<Ctor>>
+    TAugments & ExtractAugments<InstanceType<Ctor>>,
+    TEventMap & ExtractEvents<InstanceType<Ctor>>
   > {
     const instance = instantiate(pluginCtor);
     this.registry.register(instance as unknown as PluginInstance, order);
     return this as unknown as KernelBuilder<
       TPlugins & { [K in InstanceType<Ctor>['metadata']['name']]: InstanceType<Ctor> },
-      TAugments & ExtractAugments<InstanceType<Ctor>>
+      TAugments & ExtractAugments<InstanceType<Ctor>>,
+      TEventMap & ExtractEvents<InstanceType<Ctor>>
     >;
   }
 
@@ -43,8 +55,8 @@ export class KernelBuilder<
     return this;
   }
 
-  build(): Kernel<ApplyAugmentsToPlugins<TPlugins, TAugments>, TAugments> {
-    return new Kernel<ApplyAugmentsToPlugins<TPlugins, TAugments>, TAugments>(
+  build(): Kernel<ApplyAugmentsToPlugins<TPlugins, TAugments>, TAugments, TEventMap> {
+    return new Kernel<ApplyAugmentsToPlugins<TPlugins, TAugments>, TAugments, TEventMap>(
       this.registry,
       this.options
     );

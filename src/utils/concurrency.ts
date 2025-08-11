@@ -11,7 +11,7 @@ export class Semaphore {
   private counter: number;
   private readonly queue: Waiter[] = [];
 
-  constructor(private readonly maxConcurrency: number) {
+  constructor(maxConcurrency: number) {
     this.counter = maxConcurrency;
   }
 

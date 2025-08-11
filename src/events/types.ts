@@ -24,6 +24,11 @@ export interface EventOptions {
 
 export type EventHandler<Payload> = (p: Payload) => void | Promise<void>;
 
+// Bivariant handler type to allow narrower parameter annotations in user callbacks
+export type BivariantEventHandler<Payload> = {
+  bivarianceHack: (p: Payload) => void | Promise<void>;
+}['bivarianceHack'];
+
 export interface Event<Payload> {
   on(handler: EventHandler<Payload>): () => void;
   off(handler: EventHandler<Payload>): void;
@@ -99,17 +104,58 @@ export type NamespaceApiTyped<TSpec extends Record<string, EventDef>> = {
     opts?: EventOptions
   ) => Event<PayloadOf<TSpec[K]>>;
   get: <K extends keyof TSpec & string>(name: K) => Event<PayloadOf<TSpec[K]>> | undefined;
-  on: <K extends keyof TSpec & string>(
+  on: <K extends keyof TSpec & string, HP = PayloadOf<TSpec[K]>>(
     name: K,
-    handler: EventHandler<PayloadOf<TSpec[K]>>
+    handler: BivariantEventHandler<HP & PayloadOf<TSpec[K]>>
   ) => () => void;
   emit: <K extends keyof TSpec & string>(name: K, payload: PayloadOf<TSpec[K]>) => Promise<void>;
   use: (mw: Middleware) => void;
 };
 
+// ------- Global key typing helpers -------
+type JoinNsEvent<TMap extends Record<string, Record<string, EventDef>>> = {
+  [N in keyof TMap & string]: {
+    [E in keyof TMap[N] & string]: `${N}.${E}`;
+  }[keyof TMap[N] & string];
+}[keyof TMap & string];
+
+type NsOf<K extends string> = K extends `${infer N}.${string}` ? N : never;
+type EvOf<K extends string> = K extends `${string}.${infer E}` ? E : never;
+
+type PayloadOfKey<
+  TMap extends Record<string, Record<string, EventDef>>,
+  K extends string,
+> = PayloadOf<TMap[NsOf<K> & keyof TMap][EvOf<K> & keyof TMap[NsOf<K> & keyof TMap]]>;
+
 export type TypedEvents<TMap extends Record<string, Record<string, EventDef>>> = Omit<
   import('./event-bus').EventBus,
-  'namespace'
+  'namespace' | 'on' | 'emit'
 > & {
   namespace: <K extends keyof TMap & string>(namespaceName: K) => NamespaceApiTyped<TMap[K]>;
+  /** Property-based access with full autocomplete of namespaces */
+  ns: { [K in keyof TMap & string]: NamespaceApiTyped<TMap[K]> };
+  /** Global flat API: keys like "namespace.event" */
+  on: <K extends JoinNsEvent<TMap>>(
+    key: K,
+    handler: (payload: PayloadOfKey<TMap, Extract<K, string>>) => void | Promise<void>
+  ) => () => void;
+  emit: <K extends JoinNsEvent<TMap>>(
+    key: K,
+    payload: PayloadOfKey<TMap, Extract<K, string>>
+  ) => Promise<void>;
+};
+
+// Application-level augmentation point for event maps used by useEvents() with no args.
+// Projects can augment this interface via module augmentation to advertise their namespaces.
+export interface ZernEvents {
+  // brand to avoid empty-object-type rule and keep interface open for merging
+  __zern_events_brand?: never;
+}
+
+// Use only explicitly-augmented keys for better autocomplete. Avoid a string index signature
+// because it collapses keyof to `string` and kills suggestions.
+export type GlobalEventMap = {
+  [K in keyof ZernEvents & string]: ZernEvents[K] extends Record<string, EventDef>
+    ? ZernEvents[K]
+    : never;
 };

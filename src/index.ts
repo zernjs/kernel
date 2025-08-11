@@ -27,6 +27,7 @@ export * as utils from './utils';
 
 import { createKernel } from './core/createKernel';
 import type { Kernel } from './core/kernel';
+import type { TypedEvents, GlobalEventMap } from './events/types';
 import { bindEvents } from './events/event-bus';
 import type { EventBus } from './events/event-bus';
 import type { event as eventFactory } from './events/event-bus';
@@ -101,7 +102,7 @@ export async function useKernel(): Promise<Kernel> {
  */
 
 /* eslint-disable no-redeclare */
-export async function useEvents(): Promise<Kernel['events']>;
+export async function useEvents(): Promise<TypedEvents<GlobalEventMap>>;
 export async function useEvents<
   TSpec extends Record<string, ReturnType<typeof eventFactory<unknown>>>,
 >(descriptor: {
@@ -125,7 +126,7 @@ export async function useEvents<
   namespace: string;
   spec: TSpec;
 }): Promise<
-  | Kernel['events']
+  | TypedEvents<GlobalEventMap>
   | {
       emit: <K extends keyof TSpec & string>(
         event: K,
@@ -154,7 +155,7 @@ export async function useEvents<
       ) => () => void;
     }>;
   }
-  return k.events;
+  return k.events as unknown as TypedEvents<GlobalEventMap>;
 }
 /* eslint-enable no-redeclare */
 

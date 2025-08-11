@@ -176,6 +176,36 @@ export class EventBus {
   private readonly counts = new Map<string, number>();
 
   /**
+   * Typed access bag: populated lazily by Kernel through declaration.
+   * At runtime it's a simple index into namespace() to avoid coupling types to runtime.
+   */
+  public readonly ns: Record<string, NamespaceApi> = new Proxy(
+    {},
+    {
+      get: (_t, prop: string): NamespaceApi => this.namespace(prop),
+    }
+  );
+
+  /**
+   * Flat API: "namespace.event" helpers. Runtime is untyped; compile-time typing is added by TypedEvents.
+   */
+  on(key: string, handler: (payload: unknown) => void | Promise<void>): () => void {
+    const [ns, ev] = this.splitKey(key);
+    return this.namespace(ns).on(ev, handler as (p: unknown) => void);
+  }
+
+  async emit(key: string, payload: unknown): Promise<void> {
+    const [ns, ev] = this.splitKey(key);
+    await this.namespace(ns).emit(ev, payload);
+  }
+
+  private splitKey(key: string): [string, string] {
+    const idx = key.indexOf('.');
+    if (idx <= 0 || idx === key.length - 1) return [key, ''];
+    return [key.slice(0, idx), key.slice(idx + 1)];
+  }
+
+  /**
    * Starts the bus and marks all existing events as ready.
    */
   start(): void {

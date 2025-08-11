@@ -16,11 +16,15 @@ export function definePlugin<
   const Deps extends readonly DepItem[] = readonly DepItem[],
   const Aug extends Record<string, object> = Record<string, object>,
   API extends object = object,
->(spec: InferablePluginSpec<Name, Deps, Aug, API>): PluginCtor<Name, API, NonNullable<Aug>>;
+>(
+  spec: InferablePluginSpec<Name, Deps, Aug, API>
+): PluginCtor<Name, API, NonNullable<Aug>, InferablePluginSpec<Name, Deps, Aug, API>['events']>;
 
 export function definePlugin<
   const S extends PluginSpec<string, object, readonly DepItem[], Record<string, object>>,
->(spec: S): PluginCtor<S['name'], Awaited<ReturnType<S['setup']>>, NonNullable<S['augments']>> {
+>(
+  spec: S
+): PluginCtor<S['name'], Awaited<ReturnType<S['setup']>>, NonNullable<S['augments']>, S['events']> {
   const kSetup: typeof PLUGIN_SETUP_SYMBOL = PLUGIN_SETUP_SYMBOL;
   class P {
     public readonly metadata = createPluginMetadata(spec);
@@ -35,6 +39,7 @@ export function definePlugin<
   return P as unknown as PluginCtor<
     S['name'],
     Awaited<ReturnType<S['setup']>>,
-    NonNullable<S['augments']>
+    NonNullable<S['augments']>,
+    S['events']
   >;
 }

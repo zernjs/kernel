@@ -17,9 +17,11 @@ export interface AugmentationOptions {
 
 import type { PluginOptionsSpec } from './options';
 import type { Kernel } from '../core/kernel';
+import type { TypedEvents } from '../events/types';
 import type { PluginInstance } from '../core/types';
 import type { HookBus } from '../hooks/hook-bus';
 import type { EventBus } from '../events/event-bus';
+import type { EventDef } from '../events/types';
 import type { ErrorBus } from '../errors/error-bus';
 import type { AlertBus } from '../alerts/alert-bus';
 
@@ -37,7 +39,7 @@ export interface PluginSpec<
   loadBefore?: readonly string[];
   loadAfter?: readonly string[];
   hooks?: Record<string, { on: unknown; off: unknown; emit: unknown; once: unknown }>;
-  events?: { namespace: string; spec: Record<string, { __type: 'event-def'; options?: unknown }> };
+  events?: { namespace: string; spec: Record<string, EventDef> };
   errors?: { namespace: string; kinds: readonly string[] };
   alerts?: { namespace: string; kinds: readonly string[] };
   augments?: Aug;
@@ -48,10 +50,12 @@ export type PluginCtor<
   Name extends string,
   API extends object,
   Aug extends Record<string, object> = Record<string, object>,
+  Evt extends { namespace: string; spec: Record<string, EventDef> } | undefined = undefined,
 > = new () => PluginInstance & {
   metadata: { name: Name; version: string; description?: string };
   augments?: Aug;
-} & API;
+} & API &
+  (Evt extends undefined ? object : { events: Evt });
 
 export type PlainDep = PluginCtor<string, object>;
 export type DetailedDep = {
@@ -83,7 +87,7 @@ export type DependenciesContext<Deps extends readonly DepItem[]> = {
 export interface BaseSetupContext {
   kernel: Kernel<Record<string, PluginInstance>>;
   hooks: HookBus;
-  events: EventBus;
+  events: EventBus & TypedEvents<Record<string, Record<string, EventDef>>>;
   errors: ErrorBus;
   alerts: AlertBus;
   extend?: (target: string, api: Record<string, unknown>) => void;
@@ -107,3 +111,14 @@ export type InferablePluginSpec<
 > = Omit<PluginSpec<Name, API, Deps, Aug>, 'setup'> & {
   setup(ctx: SetupContext<NonNullable<Deps>>, options?: unknown): API | Promise<API>;
 };
+
+/**
+ * Extracts an event namespace→spec map from a Plugin instance type.
+ */
+export type ExtractEvents<T> = T extends { events?: { namespace: infer N; spec: infer S } }
+  ? N extends string
+    ? S extends Record<string, EventDef>
+      ? { [K in N]: S }
+      : Record<string, never>
+    : Record<string, never>
+  : Record<string, never>;
