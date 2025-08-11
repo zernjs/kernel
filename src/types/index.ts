@@ -1,11 +1,32 @@
 /**
- * @file Public types for the entire application.
+ * @file Public types root. Re-exports all layer types to the '@types' alias.
+ * Keep broad exports to preserve internal/test imports.
  */
-export { AlertDef, TypedAlerts, GlobalAlertMap } from '../alerts/types';
+export * from '../alerts/types';
 export * from '../core/types';
 export * from '../diagnostics/types';
 export * from '../errors/types';
-export { EventDef, TypedEvents, GlobalEventMap } from '../events/types';
+export {
+  EventDef,
+  TypedEvents,
+  GlobalEventMap,
+  DeliveryMode,
+  StartupMode,
+  EventNamespace,
+  EventName,
+  EventKey,
+  EventOptions,
+  EventHandler,
+  BivariantEventHandler,
+  Event,
+  Next,
+  EventContext,
+  Operator,
+  NamespaceApi,
+  NamespaceSpec,
+  NamespaceApiTyped,
+} from '../events/types';
+export * from '../events/adapters/types';
 export * from '../hooks/types';
 export * from '../lifecycle/types';
 export * from '../plugin/types';

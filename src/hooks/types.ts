@@ -33,17 +33,20 @@ export type HookDef<Payload = unknown> = {
 };
 
 /** Utility to extract payload from a HookDef. */
-export type PayloadOf<E> = E extends { __payload?: infer P } ? P : unknown;
+export type HookPayloadOf<E> = E extends { __payload?: infer P } ? P : unknown;
 
 /** Typed namespace API produced from a spec map. */
 export type HookNamespaceApiTyped<TSpec extends Record<string, HookDef>> = {
-  define: <K extends keyof TSpec & string>(name: K) => Hook<PayloadOf<TSpec[K]>>;
-  get: <K extends keyof TSpec & string>(name: K) => Hook<PayloadOf<TSpec[K]>> | undefined;
-  on: <K extends keyof TSpec & string, HP = PayloadOf<TSpec[K]>>(
+  define: <K extends keyof TSpec & string>(name: K) => Hook<HookPayloadOf<TSpec[K]>>;
+  get: <K extends keyof TSpec & string>(name: K) => Hook<HookPayloadOf<TSpec[K]>> | undefined;
+  on: <K extends keyof TSpec & string, HP = HookPayloadOf<TSpec[K]>>(
     name: K,
-    handler: HookHandler<HP & PayloadOf<TSpec[K]>>
+    handler: HookHandler<HP & HookPayloadOf<TSpec[K]>>
   ) => () => void;
-  emit: <K extends keyof TSpec & string>(name: K, payload: PayloadOf<TSpec[K]>) => Promise<void>;
+  emit: <K extends keyof TSpec & string>(
+    name: K,
+    payload: HookPayloadOf<TSpec[K]>
+  ) => Promise<void>;
 };
 
 /** Application-level augmentation point for hook maps used by useHooks() with no args. */
