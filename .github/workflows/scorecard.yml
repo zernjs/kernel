@@ -5,14 +5,17 @@ on:
     paths:
       - '**/*.ts'
       - '**/*.js'
+      - 'package.json'
   schedule: [{ cron: '0 6 * * 1' }]
 permissions:
-  id-token: write
   contents: read
-  security-events: write
 jobs:
   analysis:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      security-events: write
     steps:
       - uses: actions/checkout@v4
       - uses: ossf/scorecard-action@v2.3.3

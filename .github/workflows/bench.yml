@@ -6,6 +6,7 @@ on:
     paths:
       - '**/*.ts'
       - '**/*.js'
+      - 'package.json'
 jobs:
   bench:
     runs-on: ubuntu-latest

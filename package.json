@@ -1,6 +1,6 @@
 {
   "name": "@zern/kernel",
-  "version": "1.0.0-alpha.1",
+  "version": "1.0.0-alpha.2",
   "description": "Next-generation Zern Kernel - Ultra-lightweight plugin engine with auto-extensibility",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
