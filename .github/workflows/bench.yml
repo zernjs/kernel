@@ -19,5 +19,6 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
       - run: corepack enable && pnpm install --frozen-lockfile
-      - run: pnpm -w run bench:lifecycle
-      - run: pnpm -w run bench:throughput
+        working-directory: zern-kernel
+      - run: pnpm run bench:lifecycle
+        working-directory: zern-kernel
