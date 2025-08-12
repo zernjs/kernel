@@ -3,7 +3,6 @@
  */
 
 import type { ConflictPolicy } from '@types';
-// events adapters removed from core options
 
 /** -------------------------
  * Domain types (stable codes)
@@ -70,7 +69,6 @@ export type ExtractAugments<T> = T extends { augments?: infer A }
 /** -------------------------
  * Kernel options
  * ------------------------- */
-// EventsOptions removed
 
 export interface KernelOptions {
   augmentations?: {
@@ -78,14 +76,6 @@ export interface KernelOptions {
     namespacePrefix?: string;
   };
 }
-
-/** -------------------------
- * Plugin-declared specs (used by Kernel during init)
- * ------------------------- */
-export interface DeclaredErrors {
-  errors?: { namespace: string; kinds: readonly string[] };
-}
-// DeclaredHooks/DeclaredEvents/DeclaredAlerts removed from core
 
 /** -------------------------
  * Symbols

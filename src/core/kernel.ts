@@ -72,8 +72,6 @@ export class Kernel<
     }
   }
 
-  // removed legacy get API in favor of `kernel.plugins.<name>`
-
   async destroy(): Promise<void> {
     const all = this.plugins.list().slice().reverse();
     await this.lifecycle.runPhase('beforeDestroy', all, this);
@@ -82,8 +80,6 @@ export class Kernel<
     this.plugins.clear();
     this._loadedPlugins = [];
   }
-
-  // no declaratives to register (events/hooks/alerts removed)
 
   private async runSetupAndCollectTargets(
     resolved: PluginInstance[]

@@ -59,11 +59,10 @@ async function main(): Promise<void> {
   await report('auth.InvalidCredentials', { user: 'u1' }, { severity: 'warn' });
 
   // Await the next occurrence once (typed return)
-  const p = await once('auth.InvalidCredentials');
-  console.log('[example] once payload:', p.user);
-
-  // Emit again to demonstrate multiple emits
+  const nextInvalidP = once('auth.InvalidCredentials');
   await report('auth.InvalidCredentials', { user: 'u2' });
+  const p = await nextInvalidP;
+  console.log('[example] once payload:', p.user);
 
   // Demonstrate fail (throws)
   try {

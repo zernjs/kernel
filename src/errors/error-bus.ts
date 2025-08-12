@@ -346,7 +346,6 @@ export class ErrorBus {
 /**
  * Bind helpers scoped to a defined errors descriptor (DX parity with events/alerts bindings).
  */
-// bindErrors removed – new API uses global helpers
 
 /**
  * Create an error factory for a specific namespace/kind pair.

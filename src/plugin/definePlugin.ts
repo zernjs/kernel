@@ -6,7 +6,6 @@ import type { DepItem, PlainDep, PluginCtor, PluginSpec, InferablePluginSpec } f
 import { createPluginMetadata, isDetailed } from './descriptors';
 import { PLUGIN_SETUP_SYMBOL } from '@types';
 
-// Overload providing contextual typing for setup(ctx) based on dependsOn
 export function definePlugin<
   const Name extends string,
   const Deps extends readonly DepItem[] = readonly DepItem[],
@@ -30,7 +29,6 @@ export function definePlugin<
   const kSetup: typeof PLUGIN_SETUP_SYMBOL = PLUGIN_SETUP_SYMBOL;
   const metaInput = spec as unknown as PluginSpec<Name, API>;
 
-  // use uma classe nomeada p/ preservar o tipo no construtor (InstanceType)
   class ZernPluginImpl {
     public readonly metadata = createPluginMetadata(metaInput);
     public readonly [kSetup] = spec.setup;
@@ -41,7 +39,6 @@ export function definePlugin<
       : []) as PlainDep[];
   }
 
-  // retorne o próprio construtor tipado
   return ZernPluginImpl as unknown as PluginCtor<
     Name,
     Awaited<ReturnType<S['setup']>>,

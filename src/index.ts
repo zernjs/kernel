@@ -93,7 +93,6 @@ export async function useErrors(): Promise<Kernel['errors']> {
 import type * as ErrT from './errors/types';
 import type { PluginInstance } from './types';
 
-// Mapa inferido (quando possível); caso contrário vazio.
 type InferErrorMap =
   Awaited<ReturnType<typeof ensureKernel>> extends Kernel<
     Record<string, PluginInstance>,
@@ -103,13 +102,11 @@ type InferErrorMap =
     ? M
     : Record<never, never>;
 
-// Chave com fallback
 type ErrorKey =
   ErrT.JoinNsKind<InferErrorMap> extends never
     ? `${string}.${string}`
     : ErrT.JoinNsKind<InferErrorMap>;
 
-// Payload inferido ou unknown no fallback
 type PayloadFor<K> =
   K extends ErrT.JoinNsKind<InferErrorMap>
     ? ErrT.PayloadOfErrorKey<InferErrorMap, Extract<K, ErrT.JoinNsKind<InferErrorMap>>>

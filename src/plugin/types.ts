@@ -21,12 +21,6 @@ import type { PluginInstance } from '../core/types';
 import type { ErrorBus } from '../errors/error-bus';
 import type { DefinedErrors, ErrorDef } from '../errors/types';
 
-/** Legacy runtime-declared hooks map (pre-unification tests rely on this shape). */
-export type LegacyDeclaredHooks = Record<
-  string,
-  { on: unknown; off: unknown; emit: unknown; once: unknown }
->;
-
 export interface PluginSpec<
   Name extends string = string,
   API extends object = object,
@@ -51,7 +45,7 @@ export interface PluginSpec<
 }
 
 /**
- * Plugin constructor type that carries metadata, API, augments and optional errors/events/alerts.
+ * Plugin constructor type that carries metadata, API, augments and optional errors.
  * Including `errors` aqui é essencial para ExtractErrors<InstanceType<Ctor>> funcionar.
  */
 export type PluginCtor<
@@ -59,15 +53,11 @@ export type PluginCtor<
   API extends object,
   Aug extends Record<string, object> = Record<string, object>,
   Errs = undefined,
-  Evt extends undefined = undefined,
-  Alrt extends undefined = undefined,
 > = new () => PluginInstance & {
   metadata: { name: Name; version: string; description?: string };
   augments?: Aug;
 } & API &
-  (Errs extends unknown ? (Errs extends undefined ? object : { errors: Errs }) : object) &
-  (Evt extends undefined ? object : { events: Evt }) &
-  (Alrt extends undefined ? object : { alerts: Alrt });
+  (Errs extends unknown ? (Errs extends undefined ? object : { errors: Errs }) : object);
 
 export type PlainDep = PluginCtor<string, object>;
 export type DetailedDep = {
