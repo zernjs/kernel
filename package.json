@@ -30,6 +30,7 @@
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
+    "type-check": "tsc -p tsconfig.json --noEmit",
     "audit:ci": "pnpm audit --audit-level=high",
     "sbom": "syft dir:. -o cyclonedx-json=sbom.json",
     "sbom:docker": "docker run --rm -v ${PWD}:/work -w /work anchore/syft:latest dir:. -o cyclonedx-json=sbom.json",

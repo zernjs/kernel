@@ -1,6 +1,7 @@
 name: OpenSSF Scorecard
 on:
   push:
+    branches: [main]
   schedule: [{ cron: '0 6 * * 1' }]
 permissions:
   id-token: write
