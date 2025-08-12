@@ -13,7 +13,7 @@ describe('Plugin declarative errors', () => {
     const Auth = definePlugin({
       name: 'auth',
       version: '1.0.0',
-      errors: errors.spec,
+      errors,
       async setup() {
         return {};
       },
@@ -27,7 +27,7 @@ describe('Plugin declarative errors', () => {
       received = p;
     });
 
-    await kernel.errors.Throw(InvalidCredentials({ reason: 'x' }));
+    await kernel.errors.report(InvalidCredentials({ reason: 'x' }));
     expect(received).toEqual({ reason: 'x' });
     off();
   });

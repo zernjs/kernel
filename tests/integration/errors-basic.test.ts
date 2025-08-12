@@ -15,7 +15,7 @@ describe('ErrorBus basic', () => {
       received = { payload, meta };
     });
 
-    await kernel.errors.Throw(TypeX({ code: 42 }), { source: 'custom' });
+    await kernel.errors.report(TypeX({ code: 42 }), { source: 'custom' });
 
     const r = received as { payload: unknown; meta?: { source?: string } } | null;
     expect(r?.payload).toEqual({ code: 42 });
