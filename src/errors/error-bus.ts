@@ -128,7 +128,7 @@ export class ErrorBus {
    * @param meta - Optional metadata (source, namespace, etc.).
    * @returns Promise resolved after all handlers run.
    */
-  async Throw<Payload>(token: ErrorToken<Payload>, meta?: ErrorMeta): Promise<void> {
+  async report<Payload>(token: ErrorToken<Payload>, meta?: ErrorMeta): Promise<void> {
     const mws = this.collectMiddlewares(token.namespace, token.kind);
     await this.runMiddlewareChain(
       mws,
@@ -146,7 +146,7 @@ export class ErrorBus {
    * @param meta - Optional metadata.
    * @returns Never; always throws `ReportedError`.
    */
-  async Raise<Payload>(token: ErrorToken<Payload>, meta?: ErrorMeta): Promise<never> {
+  async fail<Payload>(token: ErrorToken<Payload>, meta?: ErrorMeta): Promise<never> {
     const mws = this.collectMiddlewares(token.namespace, token.kind);
     await this.runMiddlewareChain(
       mws,
@@ -158,10 +158,7 @@ export class ErrorBus {
     throw new ReportedError<Payload>(token.namespace, token.kind, token.payload, meta);
   }
 
-  start(): void {
-    if (this.isReady) return;
-    this.isReady = true;
-  }
+  start(): void {}
 
   use(
     mw: (
@@ -177,8 +174,9 @@ export class ErrorBus {
       kind: K
     ) => {
       on: (handler: ErrorHandler<P>) => () => void;
-      throw: (payload: P, meta?: ErrorMeta) => Promise<void>;
-      raise: (payload: P, meta?: ErrorMeta) => Promise<never>;
+      report: (payload: P, meta?: ErrorMeta) => Promise<void>;
+      fail: (payload: P, meta?: ErrorMeta) => Promise<never>;
+      once: () => Promise<P>;
       use: (
         mw: (
           ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
@@ -189,13 +187,15 @@ export class ErrorBus {
     get: <P>(kind: string) =>
       | {
           on: (h: ErrorHandler<P>) => () => void;
-          throw: (p: P, m?: ErrorMeta) => Promise<void>;
-          raise: (p: P, m?: ErrorMeta) => Promise<never>;
+          report: (p: P, m?: ErrorMeta) => Promise<void>;
+          fail: (p: P, m?: ErrorMeta) => Promise<never>;
+          once: () => Promise<P>;
         }
       | undefined;
     on: <P>(kind: string, handler: ErrorHandler<P>) => () => void;
-    throw: <P>(kind: string, payload: P, meta?: ErrorMeta) => Promise<void>;
-    raise: <P>(kind: string, payload: P, meta?: ErrorMeta) => Promise<never>;
+    report: <P>(kind: string, payload: P, meta?: ErrorMeta) => Promise<void>;
+    fail: <P>(kind: string, payload: P, meta?: ErrorMeta) => Promise<never>;
+    once: <P>(kind: string) => Promise<P>;
     use: (
       mw: (
         ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
@@ -207,8 +207,9 @@ export class ErrorBus {
       kind: K
     ): {
       on: (handler: ErrorHandler<P>) => () => void;
-      throw: (payload: P, meta?: ErrorMeta) => Promise<void>;
-      raise: (payload: P, meta?: ErrorMeta) => Promise<never>;
+      report: (payload: P, meta?: ErrorMeta) => Promise<void>;
+      fail: (payload: P, meta?: ErrorMeta) => Promise<never>;
+      once: () => Promise<P>;
       use: (
         mw: (
           ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
@@ -219,10 +220,17 @@ export class ErrorBus {
       const factory = createErrorFactory<P, K>(namespaceName, kind);
       return {
         on: (handler: ErrorHandler<P>): (() => void) => this.on<P>(factory, handler),
-        throw: async (payload: P, meta?: ErrorMeta): Promise<void> =>
-          this.Throw<P>(factory(payload), meta),
-        raise: async (payload: P, meta?: ErrorMeta): Promise<never> =>
-          this.Raise<P>(factory(payload), meta),
+        report: async (payload: P, meta?: ErrorMeta): Promise<void> =>
+          this.report<P>(factory(payload), meta),
+        fail: async (payload: P, meta?: ErrorMeta): Promise<never> =>
+          this.fail<P>(factory(payload), meta),
+        once: (): Promise<P> =>
+          new Promise<P>(resolve => {
+            const off = this.on<P>(factory, (p): void => {
+              off();
+              resolve(p);
+            });
+          }),
         use: (
           mw: (
             ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
@@ -236,17 +244,33 @@ export class ErrorBus {
       get: <P>(kind: string) => ({
         on: (h: ErrorHandler<P>) =>
           this.on<P>(createErrorFactory<P, string>(namespaceName, kind), h),
-        throw: (p: P, m?: ErrorMeta) =>
-          this.Throw<P>(createErrorFactory<P, string>(namespaceName, kind)(p), m),
-        raise: (p: P, m?: ErrorMeta) =>
-          this.Raise<P>(createErrorFactory<P, string>(namespaceName, kind)(p), m),
+        report: (p: P, m?: ErrorMeta) =>
+          this.report<P>(createErrorFactory<P, string>(namespaceName, kind)(p), m),
+        fail: (p: P, m?: ErrorMeta) =>
+          this.fail<P>(createErrorFactory<P, string>(namespaceName, kind)(p), m),
+        once: (): Promise<P> =>
+          new Promise<P>(resolve => {
+            const factory = createErrorFactory<P, string>(namespaceName, kind);
+            const off = this.on<P>(factory, (payload): void => {
+              off();
+              resolve(payload);
+            });
+          }),
       }),
       on: <P>(kind: string, handler: ErrorHandler<P>): (() => void) =>
         this.on<P>(createErrorFactory<P, string>(namespaceName, kind), handler),
-      throw: async <P>(kind: string, payload: P, meta?: ErrorMeta): Promise<void> =>
-        this.Throw<P>(createErrorFactory<P, string>(namespaceName, kind)(payload), meta),
-      raise: async <P>(kind: string, payload: P, meta?: ErrorMeta): Promise<never> =>
-        this.Raise<P>(createErrorFactory<P, string>(namespaceName, kind)(payload), meta),
+      report: async <P>(kind: string, payload: P, meta?: ErrorMeta): Promise<void> =>
+        this.report<P>(createErrorFactory<P, string>(namespaceName, kind)(payload), meta),
+      fail: async <P>(kind: string, payload: P, meta?: ErrorMeta): Promise<never> =>
+        this.fail<P>(createErrorFactory<P, string>(namespaceName, kind)(payload), meta),
+      once: async <P>(kind: string): Promise<P> =>
+        new Promise<P>(resolve => {
+          const factory = createErrorFactory<P, string>(namespaceName, kind);
+          const off = this.on<P>(factory, (payload): void => {
+            off();
+            resolve(payload);
+          });
+        }),
       use: (
         mw: (
           ctx: { namespace: string; kind: string; payload: unknown; meta?: ErrorMeta },
@@ -322,22 +346,7 @@ export class ErrorBus {
 /**
  * Bind helpers scoped to a defined errors descriptor (DX parity with events/alerts bindings).
  */
-export function bindErrors<T extends Record<string, unknown>>(
-  bus: ErrorBus,
-  defined: DefinedErrors<T, string>
-): {
-  on: <K extends keyof T & string>(kind: K, handler: ErrorHandler<T[K]>) => () => void;
-  throw: <K extends keyof T & string>(kind: K, payload: T[K], meta?: ErrorMeta) => Promise<void>;
-  raise: <K extends keyof T & string>(kind: K, payload: T[K], meta?: ErrorMeta) => Promise<never>;
-} {
-  const { namespace } = defined.spec;
-  const ns = bus.namespace(namespace);
-  return {
-    on: (kind, handler) => ns.on(kind as string, handler as ErrorHandler<unknown>),
-    throw: async (kind, payload, meta) => ns.throw(kind as string, payload, meta),
-    raise: async (kind, payload, meta) => ns.raise(kind as string, payload, meta),
-  } as const;
-}
+// bindErrors removed – new API uses global helpers
 
 /**
  * Create an error factory for a specific namespace/kind pair.

@@ -13,6 +13,10 @@ export interface ErrorMeta {
   namespace?: string;
   eventName?: string;
   plugin?: string;
+  correlationId?: string;
+  timestamp?: number;
+  severity?: 'info' | 'warn' | 'error' | 'fatal';
+  cause?: unknown;
 }
 
 export type ErrorPolicy = (err: unknown, meta?: ErrorMeta) => Promise<void> | void;
@@ -93,7 +97,7 @@ export type DefinedErrors<T extends Record<string, unknown>, N extends string> =
 };
 
 /**
- * Exception raised by `ErrorBus.Raise(token)`.
+ * Exception raised by `ErrorBus.fail(token)`.
  * @typeParam Payload - Payload carried by the token.
  */
 export class ReportedError<Payload> extends Error {
@@ -118,3 +122,40 @@ export class ReportedError<Payload> extends Error {
     this.meta = meta;
   }
 }
+
+/**
+ * Typed marker used to build the global error map and helpers’ autocomplete.
+ */
+export type ErrorDef<Payload = unknown> = { __type: 'error-def'; __payload?: Payload };
+
+/**
+ * Extract payload from ErrorDef.
+ */
+export type ErrorPayloadOf<A> = A extends { __payload?: infer P } ? P : unknown;
+
+/**
+ * 'ns.kind' union from a namespace→kinds map.
+ */
+export type JoinNsKind<TMap extends Record<string, Record<string, ErrorDef>>> = {
+  [N in keyof TMap & string]: {
+    [K in keyof TMap[N] & string]: `${N}.${K}`;
+  }[keyof TMap[N] & string];
+}[keyof TMap & string];
+
+/**
+ * Helpers to split a 'ns.kind' key type-wise.
+ */
+export type NsOf<K extends string> = K extends `${infer N}.${string}` ? N : never;
+export type KindOf<K extends string> = K extends `${string}.${infer E}` ? E : never;
+
+/**
+ * Infer payload type from a 'ns.kind' key and a global map.
+ */
+export type PayloadOfErrorKey<
+  TMap extends Record<string, Record<string, ErrorDef>>,
+  K extends string,
+> = ErrorPayloadOf<
+  TMap[NsOf<K> & keyof TMap & string][KindOf<K> &
+    keyof TMap[NsOf<K> & keyof TMap & string] &
+    string]
+>;

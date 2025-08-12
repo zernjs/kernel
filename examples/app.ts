@@ -1,57 +1,80 @@
-import { getKernel, useErrors, useEvents, useAlerts, useHooks } from '../src';
-import { Database } from './database.plugin';
-import { Utils } from './utils.plugin';
-import { Auth, InvalidCredentials, ev as AuthEvents, hk as AuthHooks } from './auth.plugin';
+import { createKernel } from '../src/core/createKernel';
+import { definePlugin } from '../src/plugin/definePlugin';
+import { defineErrors } from '../src/errors/error-bus';
+import { createErrorHelpers } from '../src';
+
+// Define typed errors for the auth domain
+const AuthErrors = defineErrors('auth', {
+  InvalidCredentials: (p: { user: string }) => p,
+  LockedAccount: (p: { user: string }) => p,
+});
+
+// Simple utility plugin
+const Utils = definePlugin({
+  name: 'utils',
+  version: '1.0.0',
+  async setup() {
+    return {
+      formatDate(d: Date): string {
+        return d.toISOString();
+      },
+    };
+  },
+});
+
+// Auth plugin declares its errors for typing and DX (no runtime coupling needed)
+const Auth = definePlugin({
+  name: 'auth',
+  version: '1.0.0',
+  errors: AuthErrors,
+  async setup() {
+    return {
+      async login(user: string, pass: string): Promise<boolean> {
+        // Simula resultado
+        return user === 'u1' && pass === 'secret';
+      },
+    };
+  },
+});
 
 async function main(): Promise<void> {
-  const kernel = getKernel()
-    .use(Database)
-    .use(Utils, { after: ['database'] })
-    .use(Auth)
-    .build();
+  console.log('[example] start');
 
+  // Use builder local (tipado) para aproveitar helpers vinculados com autocomplete/payload inferido
+  const kernel = createKernel().use(Utils).use(Auth).build();
   await kernel.init();
 
-  const db = kernel.plugins.database;
-  await db.connect('postgres://user:pass@localhost:5432/db');
+  const utils = kernel.plugins.utils;
+  console.log('[example] kernel inited @', utils.formatDate(new Date()));
 
-  // Augmented method should appear as native after init
-  await db.backup?.('daily');
+  // Bind helpers ao kernel tipado
+  const { on, report, once, fail } = createErrorHelpers(kernel);
 
-  const event = await useEvents();
-  event.on('auth.login', p => {
-    const utils = kernel.plugins.utils;
-    utils.log(`(flat) User logged in: ${p.userId}`);
-  });
-  // Subscribe to typed events using the descriptor with automatic binding via useEvents
-  const authEvents = await useEvents(AuthEvents);
-  authEvents.on('login', p => {
-    const utils = kernel.plugins.utils;
-    utils.log(`User logged in: ${p.userId} @ ${utils.formatDate(new Date())}`);
+  // Subscribe using bound helper with autocomplete and typed payload
+  const offInvalid = await on('auth.InvalidCredentials', payload => {
+    console.warn('[errors] InvalidCredentials:', payload.user);
   });
 
-  // Subscribe to hooks using descriptor binding via useHooks
-  const authHooks = await useHooks(AuthHooks);
-  authHooks.on('beforeLogin', (payload: { user: string }) => {
-    const utils = kernel.plugins.utils;
-    utils.log(`beforeLogin hook: ${payload.user}`);
-  });
+  // Trigger a report (does not throw) → listener gets called
+  await report('auth.InvalidCredentials', { user: 'u1' }, { severity: 'warn' });
 
-  // Subscribe to errors (DX: factories still work)
-  const errors = await useErrors();
-  errors.on(InvalidCredentials, payload => {
-    console.warn(`[errors] InvalidCredentials:`, payload);
-  });
+  // Await the next occurrence once (typed return)
+  const p = await once('auth.InvalidCredentials');
+  console.log('[example] once payload:', p.user);
 
-  // Subscribe to alerts (flat API with autocomplete when ZernAlerts is augmented)
-  const alerts = await useAlerts();
-  alerts.on('ui.Info', msg => {
-    console.warn(`[alert]`, msg);
-  });
+  // Emit again to demonstrate multiple emits
+  await report('auth.InvalidCredentials', { user: 'u2' });
 
-  // Trigger the flow
-  const auth = kernel.plugins.auth as { login: (u: string, p: string) => Promise<boolean> };
-  await auth.login('u1', 'secret');
+  // Demonstrate fail (throws)
+  try {
+    await fail('auth.LockedAccount', { user: 'u3' });
+  } catch (e) {
+    console.warn('[example] fail threw as expected:', e);
+  }
+
+  offInvalid();
+  await kernel.destroy();
+  console.log('[example] end');
 }
 
 void main();

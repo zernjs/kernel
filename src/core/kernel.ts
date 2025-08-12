@@ -1,54 +1,28 @@
 /**
- * @file Kernel orchestrates plugin lifecycle, events, hooks, errors and alerts.
+ * @file Kernel orchestrates plugin lifecycle, plugins registry and errors.
  */
-import { EventEmitter } from 'node:events';
 import { PluginRegistry } from '@core/registry';
 import { createPluginAccessor } from '@core/accessor';
 import type { KernelOptions, PluginInstance, PluginAccessor, ApplyAugmentsToPlugins } from '@types';
 import { PLUGIN_SETUP_SYMBOL } from '@types';
 import { resolvePluginOrder } from '@resolver';
 import { LifecycleEngine, LifecycleEvents } from '@lifecycle';
-import { HookBus } from '@hooks';
-import { EventBus } from '@events';
-import type { EventDef, TypedEvents } from '@types';
-import type { AlertDef } from '@alerts/types';
-import type { TypedAlerts as TypedAlertsAlerts } from '@alerts/types';
-import { createNodeEventEmitterAdapter } from '@events/adapters';
-import { createRxjsAdapter } from '@events/adapters';
 import { ErrorBus, isKernelError, defineErrors, createErrorFactory } from '@errors';
-import { AlertBus, bindAlerts } from '@alerts';
 import { createAugmenter, validateOptions } from '@plugin';
 import { fromPromise } from '@utils';
-
-type DeclaredHooksShape = Record<
-  string,
-  { on: unknown; off: unknown; emit: unknown; once: unknown }
->;
-type DeclaredEventsShape = {
-  namespace: string;
-  spec: Record<
-    string,
-    { __type: 'event-def'; options?: { delivery?: string; startup?: string; bufferSize?: number } }
-  >;
-};
+import type { ErrorDef } from '@errors/types';
 
 export class Kernel<
   TPlugins extends Record<string, PluginInstance> = Record<never, never>,
   TAugments extends Record<string, object> = Record<never, never>,
-  TEventMap extends Record<string, Record<string, EventDef>> = Record<never, never>,
-  TAlertMap extends Record<string, Record<string, AlertDef>> = Record<never, never>,
+  TErrorMap extends Record<string, Record<string, ErrorDef<unknown>>> = Record<never, never>,
 > {
   public readonly plugins: PluginAccessor<ApplyAugmentsToPlugins<TPlugins, TAugments>>;
   private readonly registry: PluginRegistry;
   private _loadedPlugins: string[] = [];
   private readonly lifecycle = new LifecycleEngine();
   public readonly lifecycleEvents = new LifecycleEvents();
-  public readonly hooks: HookBus;
-  public readonly events: TypedEvents<TEventMap> =
-    new EventBus() as unknown as TypedEvents<TEventMap>;
   public readonly errors = new ErrorBus();
-  public readonly alerts: AlertBus & TypedAlertsAlerts<TAlertMap> =
-    new AlertBus() as unknown as AlertBus & TypedAlertsAlerts<TAlertMap>;
 
   get loadedPlugins(): readonly string[] {
     return this._loadedPlugins;
@@ -57,19 +31,20 @@ export class Kernel<
   constructor(registry?: PluginRegistry, options?: KernelOptions) {
     this.registry = registry ?? new PluginRegistry();
     this.plugins = createPluginAccessor<ApplyAugmentsToPlugins<TPlugins, TAugments>>(this.registry);
-    this.hooks = new HookBus(this.errors);
-
-    this.setupEventErrorRouting();
-    this.configureEventAdapters(options);
+    void options;
   }
 
   use<T extends PluginInstance>(
     pluginCtor: new () => T,
     order?: { before?: string[]; after?: string[] }
-  ): Kernel<TPlugins & Record<T['metadata']['name'], T>> {
+  ): Kernel<TPlugins & Record<T['metadata']['name'], T>, TAugments, TErrorMap> {
     const instance = new pluginCtor();
     this.plugins.register(instance, order);
-    return this as unknown as Kernel<TPlugins & Record<T['metadata']['name'], T>>;
+    return this as unknown as Kernel<
+      TPlugins & Record<T['metadata']['name'], T>,
+      TAugments,
+      TErrorMap
+    >;
   }
 
   async init(): Promise<void> {
@@ -81,9 +56,6 @@ export class Kernel<
     const resolved = resolvePluginOrder({ plugins: all, userOrder });
 
     try {
-      this.registerDeclaratives(resolved);
-      this.events.start();
-
       const targets = await this.runSetupAndCollectTargets(resolved);
       this.applyAugmentTargets(targets);
 
@@ -111,110 +83,7 @@ export class Kernel<
     this._loadedPlugins = [];
   }
 
-  private setupEventErrorRouting(): void {
-    const EventsErrors = defineErrors('events', {
-      HandlerError: (e: unknown) => e,
-    });
-    defineErrors('kernel', {
-      UnknownError: (e: unknown) => e,
-    });
-    const { HandlerError: EventHandlerError } = EventsErrors.factories;
-
-    this.events.onError((namespace, eventName, err) => {
-      void this.errors.Throw(EventHandlerError(err), {
-        source: 'event',
-        namespace,
-        eventName,
-      });
-    });
-  }
-
-  private configureEventAdapters(options?: KernelOptions): void {
-    const adapters = options?.events?.adapters;
-    const rxjs = options?.events?.rxjs;
-
-    if (!adapters || adapters.includes('node')) {
-      this.events.useAdapter(createNodeEventEmitterAdapter({ emitter: new EventEmitter() }));
-    }
-
-    if (adapters) {
-      for (const a of adapters) {
-        if (a === 'node') continue;
-        this.events.useAdapter(a);
-      }
-    }
-
-    if (rxjs) {
-      this.events.useAdapter(createRxjsAdapter(rxjs));
-    }
-  }
-
-  private registerDeclaratives(resolved: PluginInstance[]): void {
-    const map: Record<string, Record<string, EventDef>> = {};
-    for (const p of resolved) {
-      const pluginHooks = (
-        p as unknown as {
-          hooks?:
-            | DeclaredHooksShape
-            | { namespace: string; spec: Record<string, import('@hooks/types').HookDef> }
-            | Record<string, import('@hooks/types').HookDef>;
-        }
-      ).hooks;
-      if (pluginHooks) {
-        if (
-          typeof (pluginHooks as { namespace?: unknown }).namespace === 'string' &&
-          typeof (pluginHooks as { spec?: unknown }).spec === 'object'
-        ) {
-          const { namespace, spec } = pluginHooks as {
-            namespace: string;
-            spec: Record<string, import('@hooks/types').HookDef>;
-          };
-          const ns = this.hooks.namespace(namespace);
-          for (const key of Object.keys(spec)) ns.define(key);
-        } else if (typeof pluginHooks === 'object') {
-          for (const hookName of Object.keys(pluginHooks as DeclaredHooksShape)) {
-            this.hooks.define(`${p.metadata.name}.${hookName}`);
-          }
-        }
-      }
-
-      const pluginEvents = (p as unknown as { events?: DeclaredEventsShape }).events;
-      if (pluginEvents) {
-        const ns = this.events.namespace(pluginEvents.namespace);
-        for (const [evt, def] of Object.entries(pluginEvents.spec)) {
-          ns.define(
-            evt,
-            def.options as {
-              delivery?: 'sync' | 'microtask' | 'async';
-              startup?: 'drop' | 'buffer' | 'sticky';
-              bufferSize?: number;
-            }
-          );
-        }
-        // accumulate for typed namespace map
-        map[pluginEvents.namespace] = pluginEvents.spec as unknown as Record<string, EventDef>;
-      }
-
-      const pluginErrors = (
-        p as unknown as { errors?: { namespace: string; kinds: readonly string[] } }
-      ).errors;
-      if (pluginErrors) {
-        // no-op: factories available to plugins via errors module
-      }
-
-      const pluginAlerts = (
-        p as unknown as { alerts?: { namespace: string; spec: Record<string, AlertDef> } }
-      ).alerts;
-      if (pluginAlerts) {
-        bindAlerts(this.alerts as unknown as AlertBus, {
-          namespace: pluginAlerts.namespace,
-          spec: pluginAlerts.spec,
-        });
-      }
-    }
-    // cast events to a typed view if any specs were declared
-    void map;
-  }
+  // no declaratives to register (events/hooks/alerts removed)
 
   private async runSetupAndCollectTargets(
     resolved: PluginInstance[]
@@ -263,11 +132,8 @@ export class Kernel<
     p: PluginInstance,
     extend: (target: string, api: Record<string, unknown>) => void
   ): {
-    kernel: Kernel<TPlugins, TAugments, TEventMap, TAlertMap>;
-    hooks: HookBus;
-    events: TypedEvents<TEventMap>;
+    kernel: Kernel<TPlugins, TAugments, TErrorMap>;
     errors: ErrorBus;
-    alerts: AlertBus & TypedAlertsAlerts<TAlertMap>;
     plugins: Record<string, unknown>;
     use: (name: string) => unknown;
     extend: (target: string, api: Record<string, unknown>) => void;
@@ -283,10 +149,7 @@ export class Kernel<
     }
     return {
       kernel: this,
-      hooks: this.hooks,
-      events: this.events,
       errors: this.errors,
-      alerts: this.alerts,
       plugins: depPlugins,
       use: (name: string): unknown => depPlugins[name],
       extend: (target: string, api: Record<string, unknown>): void => extend(target, api),
@@ -303,12 +166,12 @@ export class Kernel<
   private async handleInitError(err: unknown): Promise<void> {
     if (isKernelError(err)) {
       const KernelCodeFactory = createErrorFactory<typeof err, typeof err.code>('kernel', err.code);
-      await this.errors.Throw(KernelCodeFactory(err), { source: 'lifecycle' });
+      await this.errors.report(KernelCodeFactory(err), { source: 'lifecycle' });
       return;
     }
     const { UnknownError: LocalUnknownError } = defineErrors('kernel', {
       UnknownError: (e: unknown) => e,
     }).factories;
-    await this.errors.Throw(LocalUnknownError(err), { source: 'lifecycle' });
+    await this.errors.report(LocalUnknownError(err), { source: 'lifecycle' });
   }
 }

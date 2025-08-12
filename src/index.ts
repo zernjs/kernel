@@ -2,23 +2,19 @@
  * @file Library root and DX helpers.
  * @module zern-kernel
  * @remarks
- * Exposes all Kernel layers via named namespaces (e.g., `events`, `hooks`, `errors`),
+ * Exposes core layers via named namespaces (e.g., `core`, `errors`),
  * and provides small ergonomic helpers that transparently initialize a global Kernel
  * the first time they are used. This lets consumers import a feature and start
  * using it immediately without manual bootstrapping.
  *
- * - Namespaced re-exports: `core`, `plugin`, `events`, `hooks`, `errors`, `alerts`,
- *   `lifecycle`, `resolver`, `diagnostics`, `utils`, `types`.
+ * - Namespaced re-exports: `core`, `plugin`, `errors`, `lifecycle`, `resolver`, `diagnostics`, `utils`, `types`.
  * - Global Kernel helpers: {@link getKernel}, {@link ensureKernel}, {@link withKernel}.
- * - Layer helpers: {@link useEvents}, {@link useHooks}, {@link useErrors}, {@link useAlerts}.
- * - Convenience emitters: {@link emitEvent}, {@link emitHook}.
+ * - Layer helpers: {@link useErrors}.
+ * - Convenience emitters: removed (events/hooks/alerts not in core).
  */
 export * as core from './core';
-export * as alerts from './alerts';
 export * as diagnostics from './diagnostics';
 export * as errors from './errors';
-export * as events from './events';
-export * as hooks from './hooks';
 export * as lifecycle from './lifecycle';
 export * as plugin from './plugin';
 export * as resolver from './resolve';
@@ -27,13 +23,6 @@ export * as utils from './utils';
 
 import { createKernel } from './core/createKernel';
 import type { Kernel } from './core/kernel';
-import type { TypedEvents, GlobalEventMap } from '@events/types';
-import { bindEvents } from './events/event-bus';
-import { bindAlerts, AlertBus, createAlerts } from './alerts/alert-bus';
-import type { IAlertBus, TypedAlerts as TypedAlertsAlerts, GlobalAlertMap } from '@alerts/types';
-import { bindHooks, HookBus } from './hooks/hook-bus';
-import type { EventBus } from './events/event-bus';
-import type { event as eventFactory } from './events/event-bus';
 
 /**
  * Internal global builder singleton used by {@link getKernel} and {@link ensureKernel}.
@@ -57,7 +46,7 @@ export function getKernel(): ReturnType<typeof createKernel> {
  * ```ts
  * import { ensureKernel } from '@zern/kernel';
  * const kernel = await ensureKernel();
- * await kernel.events.namespace('auth').emit('login', { userId: 'u1' });
+ * // use kernel as needed
  * ```
  */
 export async function ensureKernel(): Promise<Kernel> {
@@ -82,133 +71,12 @@ export async function withKernel<T>(select: (k: Kernel) => T | Promise<T>): Prom
 }
 
 /**
- * Layer accessors: import and use directly; Kernel is ensured behind the scenes.
- */
-/**
  * Resolve the global {@link Kernel} instance (ensuring initialization when necessary).
  * @returns Initialized {@link Kernel}.
  */
 export async function useKernel(): Promise<Kernel> {
   return await ensureKernel();
 }
-
-/**
- * Get the Events bus from the global Kernel.
- * @returns Kernel.events
- * @example
- * ```ts
- * import { useEvents } from '@zern/kernel';
- * const events = await useEvents();
- * const created = events.namespace('user').define<{ id: string }>('created');
- * await created.emit({ id: 'u1' });
- * ```
- */
-
-/* eslint-disable no-redeclare */
-export async function useEvents(): Promise<TypedEvents<GlobalEventMap>>;
-export async function useEvents<
-  TSpec extends Record<string, ReturnType<typeof eventFactory<unknown>>>,
->(descriptor: {
-  namespace: string;
-  spec: TSpec;
-}): Promise<{
-  emit: <K extends keyof TSpec & string>(
-    event: K,
-    payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
-  ) => Promise<void>;
-  on: <K extends keyof TSpec & string>(
-    event: K,
-    handler: (
-      payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
-    ) => void | Promise<void>
-  ) => () => void;
-}>;
-export async function useEvents<
-  TSpec extends Record<string, ReturnType<typeof eventFactory<unknown>>>,
->(descriptor?: {
-  namespace: string;
-  spec: TSpec;
-}): Promise<
-  | TypedEvents<GlobalEventMap>
-  | {
-      emit: <K extends keyof TSpec & string>(
-        event: K,
-        payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
-      ) => Promise<void>;
-      on: <K extends keyof TSpec & string>(
-        event: K,
-        handler: (
-          payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
-        ) => void | Promise<void>
-      ) => () => void;
-    }
-> {
-  const k = await withKernel(kernel => kernel);
-  if (descriptor) {
-    return bindEvents(k.events as unknown as EventBus, descriptor) as unknown as Promise<{
-      emit: <K extends keyof TSpec & string>(
-        event: K,
-        payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
-      ) => Promise<void>;
-      on: <K extends keyof TSpec & string>(
-        event: K,
-        handler: (
-          payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
-        ) => void | Promise<void>
-      ) => () => void;
-    }>;
-  }
-  return k.events as unknown as TypedEvents<GlobalEventMap>;
-}
-/* eslint-enable no-redeclare */
-
-/* eslint-disable no-redeclare */
-/**
- * Get the Hooks bus from the global Kernel, or bind a typed descriptor.
- */
-export async function useHooks(): Promise<Kernel['hooks']>;
-export async function useHooks<
-  TSpec extends Record<string, ReturnType<typeof import('./hooks/hook-bus').defineHook<unknown>>>,
->(descriptor: {
-  namespace: string;
-  spec: TSpec;
-}): Promise<{
-  emit: <K extends keyof TSpec & string>(
-    name: K,
-    payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
-  ) => Promise<void>;
-  on: <K extends keyof TSpec & string>(
-    name: K,
-    handler: (
-      payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
-    ) => void | Promise<void>
-  ) => () => void;
-}>;
-export async function useHooks<
-  TSpec extends Record<string, ReturnType<typeof import('./hooks/hook-bus').defineHook<unknown>>>,
->(descriptor?: {
-  namespace: string;
-  spec: TSpec;
-}): Promise<
-  | Kernel['hooks']
-  | {
-      emit: <K extends keyof TSpec & string>(
-        name: K,
-        payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
-      ) => Promise<void>;
-      on: <K extends keyof TSpec & string>(
-        name: K,
-        handler: (
-          payload: TSpec[K] extends { __payload?: infer P } ? P : unknown
-        ) => void | Promise<void>
-      ) => () => void;
-    }
-> {
-  const k = await withKernel(kernel => kernel);
-  if (descriptor) return bindHooks(k.hooks as unknown as HookBus, descriptor);
-  return k.hooks;
-}
-/* eslint-enable no-redeclare */
 
 /**
  * Get the ErrorBus from the global Kernel.
@@ -219,83 +87,162 @@ export async function useErrors(): Promise<Kernel['errors']> {
 }
 
 /**
- * Get the AlertBus from the global Kernel.
- * @returns Kernel.alerts
+ * Typed global error helpers with autocomplete (quando possível) e payload inferido.
+ * Se o mapa de erros não for inferível via Kernel global, há fallback para `${string}.${string}` e payload unknown.
  */
-/* eslint-disable no-redeclare */
-export async function useAlerts(): Promise<TypedAlertsAlerts<GlobalAlertMap>>;
-export async function useAlerts<
-  TSpec extends Record<string, ReturnType<typeof createAlerts>['spec'][string]>,
->(descriptor: {
-  namespace: string;
-  spec: TSpec;
-}): Promise<{
-  emit: <K extends keyof TSpec & string, P = unknown>(kind: K, payload: P) => Promise<void>;
-  on: <K extends keyof TSpec & string, P = unknown>(
-    kind: K,
-    handler: (payload: P) => void | Promise<void>
-  ) => () => void;
-}>;
-export async function useAlerts<
-  TSpec extends Record<string, ReturnType<typeof createAlerts>['spec'][string]>,
->(descriptor?: {
-  namespace: string;
-  spec: TSpec;
-}): Promise<
-  | TypedAlertsAlerts<GlobalAlertMap>
-  | {
-      emit: <K extends keyof TSpec & string, P = unknown>(kind: K, payload: P) => Promise<void>;
-      on: <K extends keyof TSpec & string, P = unknown>(
-        kind: K,
-        handler: (payload: P) => void | Promise<void>
-      ) => () => void;
-    }
-> {
-  const k = await withKernel(kernel => kernel);
-  if (descriptor) return bindAlerts(k.alerts as unknown as AlertBus, descriptor);
-  return k.alerts as unknown as TypedAlertsAlerts<GlobalAlertMap>;
-}
-/* eslint-enable no-redeclare */
+import type * as ErrT from './errors/types';
+import type { PluginInstance } from './types';
 
-/** Convenience one-liners */
-/**
- * Emit an event through the global Kernel's Events bus, creating the event on-demand.
- * @typeParam Payload - Event payload type.
- * @param namespace - Namespace that groups related events.
- * @param name - Event name within the namespace.
- * @param payload - Payload to emit to subscribers.
- * @returns Promise that resolves once handlers and adapters are scheduled.
- */
-export async function emitEvent<Payload>(
-  namespace: string,
-  name: string,
-  payload: Payload
+// Mapa inferido (quando possível); caso contrário vazio.
+type InferErrorMap =
+  Awaited<ReturnType<typeof ensureKernel>> extends Kernel<
+    Record<string, PluginInstance>,
+    Record<string, object>,
+    infer M extends Record<string, Record<string, ErrT.ErrorDef<unknown>>>
+  >
+    ? M
+    : Record<never, never>;
+
+// Chave com fallback
+type ErrorKey =
+  ErrT.JoinNsKind<InferErrorMap> extends never
+    ? `${string}.${string}`
+    : ErrT.JoinNsKind<InferErrorMap>;
+
+// Payload inferido ou unknown no fallback
+type PayloadFor<K> =
+  K extends ErrT.JoinNsKind<InferErrorMap>
+    ? ErrT.PayloadOfErrorKey<InferErrorMap, Extract<K, ErrT.JoinNsKind<InferErrorMap>>>
+    : unknown;
+
+const splitKey = (key: string): [string, string] => {
+  const i = key.indexOf('.');
+  return i <= 0 ? [key, ''] : [key.slice(0, i), key.slice(i + 1)];
+};
+
+export async function report<K extends ErrorKey>(
+  key: K,
+  payload: PayloadFor<K>,
+  meta?: ErrT.ErrorMeta
 ): Promise<void> {
-  const bus = (await useEvents()) as unknown as EventBus;
-  await bus.namespace(namespace).emit(name as string, payload as unknown);
+  return withKernel(async k => {
+    const [ns, kind] = splitKey(key as string);
+    await k.errors.namespace(ns).report(kind, payload as unknown, meta);
+  });
+}
+
+export async function fail<K extends ErrorKey>(
+  key: K,
+  payload: PayloadFor<K>,
+  meta?: ErrT.ErrorMeta
+): Promise<never> {
+  return withKernel(async k => {
+    const [ns, kind] = splitKey(key as string);
+    return await k.errors.namespace(ns).fail(kind, payload as unknown, meta);
+  });
+}
+
+export async function once<K extends ErrorKey>(key: K): Promise<PayloadFor<K>> {
+  return withKernel(async k => {
+    const [ns, kind] = splitKey(key as string);
+    return await new Promise<PayloadFor<K>>(resolve => {
+      const off = k.errors.namespace(ns).on(kind, (p: unknown) => {
+        off();
+        resolve(p as PayloadFor<K>);
+      });
+    });
+  });
+}
+
+export async function on<K extends ErrorKey>(
+  key: K,
+  handler: (payload: PayloadFor<K>, meta?: ErrT.ErrorMeta) => void | Promise<void>
+): Promise<() => void> {
+  return withKernel(async k => {
+    const [ns, kind] = splitKey(key as string);
+    return k.errors
+      .namespace(ns)
+      .on(kind, handler as (p: unknown, m?: ErrT.ErrorMeta) => void | Promise<void>);
+  });
 }
 
 /**
- * Emit a hook through the global Kernel's Hooks bus, creating the hook on-demand.
- * @typeParam Payload - Hook payload type.
- * @param name - Hook name.
- * @param payload - Payload delivered to hook handlers.
- * @returns Promise that resolves once all hook handlers finish.
+ * Helpers vinculados a um Kernel concreto (preferidos para DX com autocomplete/payload inferido).
+ * Não usam any; inferem M via condicional sobre K.
  */
-export async function emitHook<Payload>(name: string, payload: Payload): Promise<void> {
-  const hb = await useHooks();
-  const hk = hb.define<Payload>(name as string);
-  await hk.emit(payload);
-}
+export function createErrorHelpers<
+  P extends Record<string, PluginInstance>,
+  A extends Record<string, object>,
+  M extends Record<string, Record<string, ErrT.ErrorDef<unknown>>>,
+>(
+  kernel: Kernel<P, A, M>
+): {
+  report<K extends ErrT.JoinNsKind<M>>(
+    key: K,
+    payload: ErrT.PayloadOfErrorKey<M, K>,
+    meta?: ErrT.ErrorMeta
+  ): Promise<void>;
+  fail<K extends ErrT.JoinNsKind<M>>(
+    key: K,
+    payload: ErrT.PayloadOfErrorKey<M, K>,
+    meta?: ErrT.ErrorMeta
+  ): Promise<never>;
+  once<K extends ErrT.JoinNsKind<M>>(key: K): Promise<ErrT.PayloadOfErrorKey<M, K>>;
+  on<K extends ErrT.JoinNsKind<M>>(
+    key: K,
+    handler: (payload: ErrT.PayloadOfErrorKey<M, K>, meta?: ErrT.ErrorMeta) => void | Promise<void>
+  ): Promise<() => void>;
+} {
+  const call = <T>(key: string, fn: (ns: string, kind: string) => Promise<T>): Promise<T> => {
+    const i = key.indexOf('.');
+    const ns = i <= 0 ? key : key.slice(0, i);
+    const kind = i <= 0 ? '' : key.slice(i + 1);
+    return fn(ns, kind);
+  };
 
-/**
- * Emit an alert through the global Kernel's Alerts bus.
- */
-export async function emitAlert<Payload>(
-  namespace: string,
-  kind: string,
-  payload: Payload
-): Promise<void> {
-  const ab = (await useAlerts()) as unknown as IAlertBus;
-  await ab.emit(namespace, kind, payload);
+  async function report<K extends ErrT.JoinNsKind<M>>(
+    key: K,
+    payload: ErrT.PayloadOfErrorKey<M, K>,
+    meta?: ErrT.ErrorMeta
+  ): Promise<void> {
+    return call<void>(key as string, async (ns, kind) =>
+      kernel.errors.namespace(ns).report(kind, payload as unknown, meta)
+    );
+  }
+
+  async function fail<K extends ErrT.JoinNsKind<M>>(
+    key: K,
+    payload: ErrT.PayloadOfErrorKey<M, K>,
+    meta?: ErrT.ErrorMeta
+  ): Promise<never> {
+    return call<never>(key as string, async (ns, kind) =>
+      kernel.errors.namespace(ns).fail(kind, payload as unknown, meta)
+    );
+  }
+
+  function once<K extends ErrT.JoinNsKind<M>>(key: K): Promise<ErrT.PayloadOfErrorKey<M, K>> {
+    return call<ErrT.PayloadOfErrorKey<M, K>>(
+      key as string,
+      async (ns, kind) =>
+        new Promise<ErrT.PayloadOfErrorKey<M, K>>(resolve => {
+          const off = kernel.errors.namespace(ns).on(kind, (p: unknown) => {
+            off();
+            resolve(p as ErrT.PayloadOfErrorKey<M, K>);
+          });
+        })
+    );
+  }
+
+  function on<K extends ErrT.JoinNsKind<M>>(
+    key: K,
+    handler: (payload: ErrT.PayloadOfErrorKey<M, K>, meta?: ErrT.ErrorMeta) => void | Promise<void>
+  ): Promise<() => void> {
+    return call<() => void>(key as string, async (ns, kind) =>
+      kernel.errors
+        .namespace(ns)
+        .on(kind, handler as (p: unknown, m?: ErrT.ErrorMeta) => void | Promise<void>)
+    );
+  }
+
+  return { report, fail, once, on };
 }

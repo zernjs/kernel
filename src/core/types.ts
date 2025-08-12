@@ -3,7 +3,7 @@
  */
 
 import type { ConflictPolicy } from '@types';
-import type { EventAdapter, RxjsSubjectLike } from '../events/adapters/types';
+// events adapters removed from core options
 
 /** -------------------------
  * Domain types (stable codes)
@@ -70,13 +70,9 @@ export type ExtractAugments<T> = T extends { augments?: infer A }
 /** -------------------------
  * Kernel options
  * ------------------------- */
-export interface EventsOptions {
-  adapters?: Array<'node' | EventAdapter>;
-  rxjs?: { subjectFactory: (namespace: string, eventName: string) => RxjsSubjectLike<unknown> };
-}
+// EventsOptions removed
 
 export interface KernelOptions {
-  events?: EventsOptions;
   augmentations?: {
     policy?: ConflictPolicy;
     namespacePrefix?: string;
@@ -86,21 +82,10 @@ export interface KernelOptions {
 /** -------------------------
  * Plugin-declared specs (used by Kernel during init)
  * ------------------------- */
-export interface DeclaredHooks {
-  hooks?: Record<string, { on: unknown; off: unknown; emit: unknown; once: unknown }>;
-}
-
-export interface DeclaredEvents {
-  events?: { namespace: string; spec: Record<string, { __type: 'event-def'; options?: unknown }> };
-}
-
 export interface DeclaredErrors {
   errors?: { namespace: string; kinds: readonly string[] };
 }
-
-export interface DeclaredAlerts {
-  alerts?: { namespace: string; spec: Record<string, { __type: 'alert-def' }> };
-}
+// DeclaredHooks/DeclaredEvents/DeclaredAlerts removed from core
 
 /** -------------------------
  * Symbols

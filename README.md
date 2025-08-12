@@ -110,6 +110,12 @@ pnpm -w test --filter @zern/kernel
 
 ---
 
+## 📦 Packages
+
+- `packages/ts-ls`: TypeScript Language Service plugin that serves virtual type augmentations for Zern Kernel during development. See `packages/ts-ls/README.md`.
+
+---
+
 ## 🔧 Minimal API Reference
 
 - Kernel

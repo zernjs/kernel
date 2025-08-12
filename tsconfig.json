@@ -39,8 +39,7 @@
       "@types": ["src/types"],
       "@utils/*": ["src/utils/*"],
       "@utils": ["src/utils"]
-    },
-    "plugins": [{ "name": "./tools/ts-ls-plugin", "patterns": ["**/*.plugin.ts"] }]
+    }
   },
   "include": [
     "src/**/*.ts",
@@ -49,7 +48,6 @@
     "tests/**/*.ts",
     "examples/**/*.ts",
     "examples/**/*.d.ts",
-    "generated/**/*.d.ts",
     "tsup.config.ts"
   ],
   "exclude": ["dist", "node_modules"]
