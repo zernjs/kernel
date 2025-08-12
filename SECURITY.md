@@ -1,11 +1,27 @@
 ## Security Policy
 
-Report potential vulnerabilities privately (security@yourdomain.example) or open a confidential issue if your platform supports it. We acknowledge reports within 72 hours and aim to ship fixes as quickly as possible, prioritizing severity and exploitability.
+If you believe you have found a security vulnerability in this project, please report it responsibly using one of the following linked channels:
+
+- Email: [viniciusborgeis@gmail.com](mailto:viniciusborgeis@gmail.com)
+- GitHub Security Advisories: https://github.com/zernjs/zern-kernel/security/advisories/new
+
+We will acknowledge vulnerability reports within 72 hours, provide an initial triage response within 7 days, and target a fix or mitigation within 90 days of confirmation (earlier for critical issues). We follow Coordinated Vulnerability Disclosure (CVD) and may publicly disclose within 90 days, or sooner if a fix is available and users can reasonably update. If a vulnerability is actively exploited in the wild, we may accelerate disclosure and remediation timelines.
 
 ## Supported Versions
 
 - Main branch and latest prereleases (tags `vX.Y.Z[-pre]`).
-- Older tags receive fixes based on severity and feasibility.
+- Older tags may receive backported fixes based on severity and feasibility.
+
+## What is a Vulnerability?
+
+A vulnerability is a weakness that could allow confidentiality, integrity, or availability violations. Examples include injection, insecure defaults, privilege escalation, or supply‑chain risks. If in doubt, please disclose privately and we will help determine impact and scope.
+
+## Disclosure Policy and Timelines
+
+- Acknowledge receipt: within 72 hours
+- Initial triage and severity: within 7 days
+- Target remediation: within 30–90 days depending on complexity and impact
+- Public disclosure: coordinated, usually within 90 days of confirmation, or earlier by mutual agreement
 
 ## Hardening & Quality Gates
 
@@ -31,7 +47,7 @@ This produces `sbom.json` in the repository root (`zern-kernel/`). You can inges
 
 1. Triage: reproduce and classify (severity, impact, affected versions).
 2. Fix: develop patch and tests; run CI gates (lint, type-check, tests, CodeQL).
-3. Release: publish patched version; update changelog and advisories.
+3. Release: publish patched version; update changelog and advisories; coordinate disclosure.
 4. Notify: credit reporters when appropriate.
 
 ## Operational Guidance
