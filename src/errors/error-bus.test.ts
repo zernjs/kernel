@@ -16,7 +16,7 @@ describe('ErrorBus basic routing', () => {
 
     const token = NotFound({ id: '42' });
     const meta: ErrorMeta = { source: 'custom', namespace: 'repo' };
-    await bus.Throw(token, meta);
+    await bus.report(token, meta);
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith({ id: '42' }, meta);
@@ -28,9 +28,9 @@ describe('ErrorBus basic routing', () => {
 
     const handler = vi.fn<(payload: string, meta?: ErrorMeta) => void>();
     const off = bus.on(Invalid, handler);
-    await bus.Throw(Invalid('a'));
+    await bus.report(Invalid('a'));
     off();
-    await bus.Throw(Invalid('b'));
+    await bus.report(Invalid('b'));
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenLastCalledWith('a', undefined);
@@ -48,14 +48,14 @@ describe('ErrorBus basic routing', () => {
     const off = bus.on(E, handler);
     off();
     off();
-    await bus.Throw(E(1));
+    await bus.report(E(1));
     expect(handler).not.toHaveBeenCalled();
   });
 
   it('does nothing when Throw has no subscribers', async () => {
     const bus = new ErrorBus();
     const E = createErrorFactory<void, 'E'>('ns', 'E');
-    await expect(bus.Throw(E(undefined))).resolves.toBeUndefined();
+    await expect(bus.report(E(undefined))).resolves.toBeUndefined();
   });
 
   it('awaits handlers sequentially, then Raise throws ReportedError', async () => {
@@ -74,7 +74,7 @@ describe('ErrorBus basic routing', () => {
     bus.on(Boom, h1);
     bus.on(Boom, h2);
 
-    await expect(bus.Raise(Boom(5), { source: 'custom' })).rejects.toBeInstanceOf(ReportedError);
+    await expect(bus.fail(Boom(5), { source: 'custom' })).rejects.toBeInstanceOf(ReportedError);
 
     expect(order).toEqual(['h1', 'h2']);
     expect(h1).toHaveBeenCalledTimes(1);
@@ -108,7 +108,7 @@ describe('createErrorFactory', () => {
     const handler = vi.fn((_p: number, _m?: ErrorMeta) => {});
     bus.on(F, handler);
     bus.on(F, handler);
-    await bus.Throw(F(1));
+    await bus.report(F(1));
     expect(handler).toHaveBeenCalledTimes(1);
   });
 });
@@ -137,8 +137,8 @@ describe('defineErrors', () => {
     bus.on(factories.InvalidCredentials, hA);
     bus.on(factories.RateLimited, hB);
 
-    await bus.Throw(tokenA, { source: 'custom', plugin: 'auth' });
-    await bus.Throw(tokenB);
+    await bus.report(tokenA, { source: 'custom', plugin: 'auth' });
+    await bus.report(tokenB);
 
     expect(hA).toHaveBeenCalledWith({ user: 'u1' }, { source: 'custom', plugin: 'auth' });
     expect(hB).toHaveBeenCalledWith({ retryAfter: 10 }, undefined);

@@ -31,6 +31,8 @@ out/
 .Trashes
 ehthumbs.db
 Thumbs.db
+.kiro/
+
 
 # Logs
 logs/

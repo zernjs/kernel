@@ -52,6 +52,7 @@ export default defineConfig({
       '@utils': resolve(__dirname, './src/utils'),
     },
   },
+  plugins: [],
   esbuild: {
     target: 'es2022',
   },

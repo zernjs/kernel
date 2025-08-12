@@ -13,7 +13,6 @@ import type {
   PhasePolicy,
 } from '@types';
 
-// phases order reference (future use for more complex scheduling)
 const PHASES: ReadonlyArray<LifecyclePhase> = Object.freeze([
   'beforeInit',
   'init',

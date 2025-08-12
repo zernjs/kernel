@@ -76,7 +76,6 @@ describe('createLogger', () => {
     expect(spies.warn.mock.calls[0]?.[0]).toBe('[svc]');
     expect(spies.warn.mock.calls[0]?.[1]).toBe('c');
 
-    // error and fatal both map to console.error
     expect(spies.error).toHaveBeenCalledTimes(2);
     expect(spies.error.mock.calls[0]?.[0]).toBe('[svc]');
     expect(spies.error.mock.calls[0]?.[1]).toBe('d');

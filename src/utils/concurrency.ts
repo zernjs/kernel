@@ -70,7 +70,7 @@ export class TaskQueue {
       try {
         await t();
       } catch {
-        // swallow; observability should be added by caller
+        /* empty */
       }
     }
     this.running = false;

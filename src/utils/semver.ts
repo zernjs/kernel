@@ -62,7 +62,6 @@ export class SemverValidator {
       return compareTriples(a, r) < 0;
     }
 
-    // simple OR support: 'x || y'
     if (range.includes('||')) {
       return range
         .split('||')

@@ -26,7 +26,6 @@ function handleConflict(
     out[computeNamespacedKey(namespacePrefix, key)] = value;
     return true;
   }
-  // policy === 'override' → fallthrough to assign out[key] below
   return false;
 }
 

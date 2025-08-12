@@ -17,28 +17,16 @@ export interface AugmentationOptions {
 
 import type { PluginOptionsSpec } from './options';
 import type { Kernel } from '../core/kernel';
-import type { TypedEvents, GlobalEventMap } from '../events/types';
 import type { PluginInstance } from '../core/types';
-import type { HookBus } from '../hooks/hook-bus';
-import type { EventBus } from '../events/event-bus';
-import type { EventDef } from '../events/types';
 import type { ErrorBus } from '../errors/error-bus';
-// Intentionally not importing AlertBus here to avoid unused warnings
-import type { AlertDef } from '../alerts/types';
-import type { HookDef } from '../hooks/types';
-import type { TypedAlerts, GlobalAlertMap } from '../alerts/types';
-
-/** Legacy runtime-declared hooks map (pre-unification tests rely on this shape). */
-export type LegacyDeclaredHooks = Record<
-  string,
-  { on: unknown; off: unknown; emit: unknown; once: unknown }
->;
+import type { DefinedErrors, ErrorDef } from '../errors/types';
 
 export interface PluginSpec<
   Name extends string = string,
   API extends object = object,
   Deps extends readonly DepItem[] = readonly DepItem[],
   Aug extends Record<string, object> = Record<string, object>,
+  Errs = undefined,
 > {
   name: Name;
   version: string;
@@ -47,31 +35,29 @@ export interface PluginSpec<
   dependsOn?: Deps;
   loadBefore?: readonly string[];
   loadAfter?: readonly string[];
-  hooks?:
-    | LegacyDeclaredHooks
-    | Record<string, HookDef>
-    | { namespace: string; spec: Record<string, HookDef> };
-  events?: { namespace: string; spec: Record<string, EventDef> };
-  errors?: { namespace: string; kinds: readonly string[] };
-  alerts?: { namespace: string; spec: Record<string, AlertDef> };
+  /**
+   * Aceita o valor retornado por defineErrors(namespace, spec), sem restringir aqui.
+   * O tipo real é extraído por ExtractErrors<T> abaixo.
+   */
+  errors?: Errs;
   augments?: Aug;
   setup(ctx: SetupContext<NonNullable<Deps>>, options?: unknown): API | Promise<API>;
 }
 
+/**
+ * Plugin constructor type that carries metadata, API, augments and optional errors.
+ * Including `errors` aqui é essencial para ExtractErrors<InstanceType<Ctor>> funcionar.
+ */
 export type PluginCtor<
   Name extends string,
   API extends object,
   Aug extends Record<string, object> = Record<string, object>,
-  Evt extends { namespace: string; spec: Record<string, EventDef> } | undefined = undefined,
-  Alrt extends
-    | { namespace: string; spec: Record<string, import('../alerts/types').AlertDef> }
-    | undefined = undefined,
+  Errs = undefined,
 > = new () => PluginInstance & {
   metadata: { name: Name; version: string; description?: string };
   augments?: Aug;
 } & API &
-  (Evt extends undefined ? object : { events: Evt }) &
-  (Alrt extends undefined ? object : { alerts: Alrt });
+  (Errs extends unknown ? (Errs extends undefined ? object : { errors: Errs }) : object);
 
 export type PlainDep = PluginCtor<string, object>;
 export type DetailedDep = {
@@ -101,12 +87,7 @@ export type DependenciesContext<Deps extends readonly DepItem[]> = {
 };
 
 export interface BaseSetupContext {
-  kernel: Kernel<Record<string, PluginInstance>> & {
-    events: TypedEvents<GlobalEventMap>;
-    alerts: TypedAlerts<GlobalAlertMap>;
-  };
-  hooks: HookBus;
-  events: EventBus & TypedEvents<Record<string, Record<string, EventDef>>>;
+  kernel: Kernel<Record<string, PluginInstance>>;
   errors: ErrorBus;
   extend?: (target: string, api: Record<string, unknown>) => void;
 }
@@ -126,28 +107,20 @@ export type InferablePluginSpec<
   Deps extends readonly DepItem[],
   Aug extends Record<string, object>,
   API extends object,
-> = Omit<PluginSpec<Name, API, Deps, Aug>, 'setup'> & {
+  Errs = undefined,
+> = Omit<PluginSpec<Name, API, Deps, Aug, Errs>, 'setup'> & {
   setup(ctx: SetupContext<NonNullable<Deps>>, options?: unknown): API | Promise<API>;
 };
 
 /**
- * Extracts an event namespace→spec map from a Plugin instance type.
+ * Extrai o mapa namespace→kinds a partir de errors definido por defineErrors(namespace, spec).
  */
-export type ExtractEvents<T> = T extends { events?: { namespace: infer N; spec: infer S } }
+export type ExtractErrors<T> = T extends {
+  errors?: DefinedErrors<infer Spec, infer N>;
+}
   ? N extends string
-    ? S extends Record<string, EventDef>
-      ? { [K in N]: S }
-      : Record<string, never>
-    : Record<string, never>
-  : Record<string, never>;
-
-/**
- * Extracts an alert namespace→spec map from a Plugin instance type.
- */
-export type ExtractAlerts<T> = T extends { alerts?: { namespace: infer N; spec: infer S } }
-  ? N extends string
-    ? S extends Record<string, AlertDef>
-      ? { [K in N]: S }
-      : Record<string, never>
-    : Record<string, never>
-  : Record<string, never>;
+    ? Spec extends Record<string, unknown>
+      ? { [K in N]: { [P in keyof Spec & string]: ErrorDef<Spec[P]> } }
+      : Record<never, never>
+    : Record<never, never>
+  : Record<never, never>;

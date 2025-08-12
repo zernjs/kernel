@@ -6,53 +6,43 @@ import type { DepItem, PlainDep, PluginCtor, PluginSpec, InferablePluginSpec } f
 import { createPluginMetadata, isDetailed } from './descriptors';
 import { PLUGIN_SETUP_SYMBOL } from '@types';
 
-function toPlainDeps(dependsOn: readonly DepItem[] | undefined): PlainDep[] {
-  return dependsOn ? dependsOn.map(d => (isDetailed(d) ? d.plugin : d)) : [];
-}
-
-// Overload providing contextual typing for setup(ctx) based on dependsOn
 export function definePlugin<
   const Name extends string,
   const Deps extends readonly DepItem[] = readonly DepItem[],
   const Aug extends Record<string, object> = Record<string, object>,
   API extends object = object,
+  Errs = undefined,
 >(
-  spec: InferablePluginSpec<Name, Deps, Aug, API>
-): PluginCtor<
-  Name,
-  API,
-  NonNullable<Aug>,
-  InferablePluginSpec<Name, Deps, Aug, API>['events'],
-  InferablePluginSpec<Name, Deps, Aug, API>['alerts']
->;
+  spec: InferablePluginSpec<Name, Deps, Aug, API, Errs>
+): PluginCtor<Name, API, NonNullable<Aug>, Errs>;
 
 export function definePlugin<
-  const S extends PluginSpec<string, object, readonly DepItem[], Record<string, object>>,
+  const Name extends string,
+  API extends object,
+  const Deps extends readonly DepItem[] = readonly DepItem[],
+  const Aug extends Record<string, object> = Record<string, object>,
+  Errs = undefined,
+  S extends PluginSpec<Name, API, Deps, Aug, Errs> = PluginSpec<Name, API, Deps, Aug, Errs>,
 >(
   spec: S
-): PluginCtor<
-  S['name'],
-  Awaited<ReturnType<S['setup']>>,
-  NonNullable<S['augments']>,
-  S['events'],
-  S['alerts']
-> {
+): PluginCtor<Name, Awaited<ReturnType<S['setup']>>, NonNullable<S['augments']>, S['errors']> {
   const kSetup: typeof PLUGIN_SETUP_SYMBOL = PLUGIN_SETUP_SYMBOL;
-  class P {
-    public readonly metadata = createPluginMetadata(spec);
+  const metaInput = spec as unknown as PluginSpec<Name, API>;
+
+  class ZernPluginImpl {
+    public readonly metadata = createPluginMetadata(metaInput);
     public readonly [kSetup] = spec.setup;
-    public readonly hooks = spec.hooks;
-    public readonly events = spec.events;
     public readonly errors = spec.errors;
-    public readonly alerts = spec.alerts;
     public readonly augments = spec.augments;
-    static readonly dependsOn: PlainDep[] = toPlainDeps(spec.dependsOn);
+    static readonly dependsOn: PlainDep[] = (spec.dependsOn
+      ? spec.dependsOn.map(d => (isDetailed(d) ? d.plugin : d))
+      : []) as PlainDep[];
   }
-  return P as unknown as PluginCtor<
-    S['name'],
+
+  return ZernPluginImpl as unknown as PluginCtor<
+    Name,
     Awaited<ReturnType<S['setup']>>,
     NonNullable<S['augments']>,
-    S['events'],
-    S['alerts']
+    S['errors']
   >;
 }

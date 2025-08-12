@@ -1,0 +1,17 @@
+name: Benchmarks
+on:
+  workflow_dispatch:
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: corepack enable && pnpm install --frozen-lockfile
+      - run: pnpm -w run bench:lifecycle
+      - run: pnpm -w run bench:throughput

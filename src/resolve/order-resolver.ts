@@ -117,7 +117,6 @@ function validateDependenciesAndVersions(
 
       const okTry = tryCatch(() => SemverValidator.satisfies(dep.metadata.version, d.version!));
       if (!okTry.ok) {
-        // refine error shapes when parsing fails for either side
         try {
           SemverValidator.parse(dep.metadata.version);
         } catch {
