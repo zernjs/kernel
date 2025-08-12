@@ -20,6 +20,14 @@ Type-safe plugin runtime with deterministic load order, lifecycle, hooks, events
 
 </div>
 
+<div align="center">
+
+[![CI](https://github.com/zern/zern-kernel/actions/workflows/ci.yml/badge.svg)](https://github.com/zern/zern-kernel/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/zern/zern-kernel/actions/workflows/codeql.yml/badge.svg)](https://github.com/zern/zern-kernel/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/zern/zern-kernel?label=OpenSSF%20Scorecard)](https://github.com/ossf/scorecard)
+
+</div>
+
 **The pure plugin engine powering the ZernJS Framework**
 
 [Documentation](./docs/overview.md) • [API Reference](./docs/overview.md#api-reference) • [Layers](#-layers) • [Examples](#-quick-start)
@@ -147,6 +155,14 @@ pnpm -w test --filter @zern/kernel
 For full details, see the docs in `./docs/`.
 
 ---
+
+## Security & Quality Gates
+
+- Tests and coverage: see CI artifacts.
+- Static analysis: CodeQL (no critical findings).
+- OpenSSF Scorecard: automated checks.
+- Supply chain: SBOM (CycloneDX), lockfile, Dependabot.
+- Benchmarks: lifecycle and throughput workloads (tools/benchmarks).
 
 ## 📄 License
 
