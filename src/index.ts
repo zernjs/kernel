@@ -28,15 +28,16 @@ import type { Kernel } from './core/kernel';
  * Internal global builder singleton used by {@link getKernel} and {@link ensureKernel}.
  * It is created lazily and cached for the process lifetime.
  */
-let kernelSingleton: ReturnType<typeof createKernel> | null = null;
+let kernelBuilderSingleton: ReturnType<typeof createKernel> | null = null;
+let kernelInstanceSingleton: Kernel | null = null;
 
 /**
  * Get (or create) the global Kernel builder.
  * @returns KernelBuilder instance created by {@link createKernel}.
  */
 export function getKernel(): ReturnType<typeof createKernel> {
-  if (!kernelSingleton) kernelSingleton = createKernel();
-  return kernelSingleton;
+  if (!kernelBuilderSingleton) kernelBuilderSingleton = createKernel();
+  return kernelBuilderSingleton;
 }
 
 /**
@@ -50,13 +51,12 @@ export function getKernel(): ReturnType<typeof createKernel> {
  * ```
  */
 export async function ensureKernel(): Promise<Kernel> {
+  if (kernelInstanceSingleton) return kernelInstanceSingleton;
   const builder = getKernel();
-  const kernel = builder.build() as unknown as Kernel & { __initialized?: boolean };
-  if (kernel.__initialized !== true) {
-    await kernel.init();
-    kernel.__initialized = true;
-  }
-  return kernel as Kernel;
+  const kernel = builder.build();
+  await kernel.init();
+  kernelInstanceSingleton = kernel;
+  return kernelInstanceSingleton;
 }
 
 /**
