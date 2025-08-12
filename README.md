@@ -19,7 +19,7 @@ Type-safe plugin runtime with deterministic load order, lifecycle, typed errors 
 
 [![CI](https://github.com/zernjs/zern-kernel/actions/workflows/ci.yml/badge.svg)](https://github.com/zernjs/zern-kernel/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/zernjs/zern-kernel/actions/workflows/codeql.yml/badge.svg)](https://github.com/zernjs/zern-kernel/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/zern/zern-kernel?label=OpenSSF%20Scorecard)](https://github.com/ossf/scorecard)
+[![OpenSSF Scorecard](https://img.shields.io/ossf-scorecard/github.com/zernjs/zern-kernel?label=OpenSSF%20Scorecard)](https://github.com/ossf/scorecard)
 
 </div>
 
