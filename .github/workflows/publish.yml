@@ -20,6 +20,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            package.json
+            dist/
+            artifacts/
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

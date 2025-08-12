@@ -2,8 +2,16 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [main, develop]
+    paths:
+      - '**/*.ts'
+      - '**/*.js'
+      - 'package.json'
   pull_request:
     branches: [main, develop]
+    paths:
+      - '**/*.ts'
+      - '**/*.js'
+      - 'package.json'
 
 permissions:
   contents: read

@@ -1,6 +1,11 @@
 name: Benchmarks
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.ts'
+      - '**/*.js'
 jobs:
   bench:
     runs-on: ubuntu-latest
