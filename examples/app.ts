@@ -54,7 +54,6 @@ async function main(): Promise<void> {
   const offInvalid = await on('auth.InvalidCredentials', payload => {
     console.warn('[errors] InvalidCredentials:', payload.user);
   });
-
   // Trigger a report (does not throw) → listener gets called
   await report('auth.InvalidCredentials', { user: 'u1' }, { severity: 'warn' });
 
