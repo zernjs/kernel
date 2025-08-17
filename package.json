@@ -1,7 +1,7 @@
 {
   "name": "@zern/kernel",
   "version": "1.0.0-alpha.2",
-  "description": "Next-generation Zern Kernel - Ultra-lightweight plugin engine with auto-extensibility",
+  "description": "Ultra-lightweight plugin engine with natural DX and auto-extensibility",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -15,27 +15,22 @@
   },
   "files": [
     "dist",
-    "generated/zern-augmentations.d.ts",
     "README.md"
   ],
   "scripts": {
     "build": "tsup",
-    "gen:types": "node ./scripts/gen-augmentations.mjs",
-    "example": "tsx examples/app.ts",
+    "example": "tsx examples/basic-usage.ts",
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "test:coverage:watch": "vitest --coverage --watch",
-    "coverage:endpoint": "node scripts/coverage-endpoint.mjs",
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "audit:ci": "pnpm audit --audit-level=high",
     "sbom": "syft dir:. -o cyclonedx-json=sbom.json",
-    "sbom:docker": "docker run --rm -v ${PWD}:/work -w /work anchore/syft:latest dir:. -o cyclonedx-json=sbom.json",
-    "bench:lifecycle": "node --loader ts-node/esm tools/benchmarks/lifecycle.ts",
-    "bench:throughput": "node --loader ts-node/esm tools/benchmarks/throughput.ts"
+    "sbom:docker": "docker run --rm -v ${PWD}:/work -w /work anchore/syft:latest dir:. -o cyclonedx-json=sbom.json"
   },
   "keywords": [
     "plugins",

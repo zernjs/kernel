@@ -1,9 +1,8 @@
 <h1 align="center">🔥 Zern Kernel</h1>
 <h3 align="center">Strongly-Typed Plugin Kernel</h3>
 
-<div align="center">
 
-Type-safe plugin runtime with deterministic load order, lifecycle, typed errors with autocomplete, and ergonomic augmentations.
+> Ultra-lightweight plugin engine with natural DX and auto-extensibility
 
 <div align="center">
 
@@ -22,175 +21,273 @@ Type-safe plugin runtime with deterministic load order, lifecycle, typed errors 
 
 </div>
 
-**The pure plugin engine powering the ZernJS Framework**
 
-[Documentation](./docs/overview.md) • [API Reference](./docs/overview.md#api-reference) • [Layers](#-layers) • [Examples](#-quick-start)
+## Overview
 
-</div>
+Zern Kernel is a next-generation plugin system designed for exceptional developer experience. It features a minimal core that allows plugins to be used naturally (like independent libraries), with automatic dependency resolution, transparent augmentations, and complete type safety.
 
----
+## Key Features
 
-## ✨ Highlights
+- **🪶 Minimal Core**: Only essential functionality (register, init, augment)
+- **🔄 Natural DX**: Import and use plugin functions directly
+- **🤖 Auto Resolution**: Global kernel resolves automatically when needed
+- **🔧 Transparent Augmentation**: Plugins can extend others invisibly
+- **📝 Zero Boilerplate**: Fluent API eliminates ceremonial code
+- **🛡️ Complete Type Safety**: Full TypeScript support with autocomplete
 
-- 🔌 Plugin architecture with first-class DX (`definePlugin`, `createKernel`)
-- ✅ Strong typing and autocomplete across plugins and typed errors
-- 🧭 Deterministic plugin order (Deps > User before/after > Hints) with topological sort
-- 🔁 Lifecycle engine with phases and policies (timeouts/retry)
-- 🧰 Typed ErrorBus with factories and helpers `report`/`fail`/`once`/`on`
-- 🧩 Augmentations: declarative (`augments`) and `ctx.extend()` with conflict policies
+## Quick Start
 
----
-
-## 🚀 Quick Start (Typed Errors)
-
-```ts
-import { core, plugin, errors as Err, report, fail, once, on } from '@zern/kernel';
-
-const AuthErrors = Err.defineErrors('auth', {
-  InvalidCredentials: (p: { user: string }) => p,
-  LockedAccount: (p: { user: string }) => p,
-});
-
-const Auth = plugin.definePlugin({
-  name: 'auth',
-  version: '1.0.0',
-  errors: AuthErrors,
-  async setup() {
-    return {
-      async login(user: string, pass: string) {
-        if (user !== 'u1' || pass !== 'secret') {
-          await report('auth.InvalidCredentials', { user });
-          return false;
-        }
-        return true;
-      },
-    };
-  },
-});
-
-const kernel = core.createKernel().use(Auth).build();
-await kernel.init();
-
-await report('auth.InvalidCredentials', { user: 'u2' });
-try {
-  await fail('auth.LockedAccount', { user: 'u3' });
-} catch {}
-const payload = await once('auth.InvalidCredentials');
-await on('auth.InvalidCredentials', p => console.log(p.user));
-```
-
-### Bound helpers with `createErrorHelpers`
-
-```ts
-import { core, plugin, errors as Err, createErrorHelpers } from '@zern/kernel';
-
-const AuthErrors = Err.defineErrors('auth', {
-  InvalidCredentials: (p: { user: string }) => p,
-  LockedAccount: (p: { user: string }) => p,
-});
-
-const Auth = plugin.definePlugin({
-  name: 'auth',
-  version: '1.0.0',
-  errors: AuthErrors,
-  async setup() {
-    return {};
-  },
-});
-
-const kernel = core.createKernel().use(Auth).build();
-await kernel.init();
-
-// Prefer bound helpers for best DX (autocomplete and inferred payloads)
-const { on, report, once, fail } = createErrorHelpers(kernel);
-
-const off = await on('auth.InvalidCredentials', payload => {
-  console.log('invalid:', payload.user);
-});
-
-await report('auth.InvalidCredentials', { user: 'u1' });
-const payload = await once('auth.InvalidCredentials');
-try {
-  await fail('auth.LockedAccount', { user: 'u3' });
-} catch {}
-off();
-```
-
----
-
-## 🧩 Layers
-
-> Deep-dive docs for each layer live under `docs/`.
-
-- [Core](./docs/core.md): builder, kernel, registry, accessors
-- [Plugin](./docs/plugin.md): `definePlugin`, options, metadata, augmentations
-- [Resolve](./docs/resolve.md): constraint graph, topological sort, order resolver
-- [Lifecycle](./docs/lifecycle.md): phases, engine, policies
-- [Errors](./docs/errors.md): `ErrorBus`, kernel error types, policies, helpers
-- [Diagnostics](./docs/diagnostics.md): logger, metrics, debug
-- [Types](./docs/types.md): shared types and public exports
-- [Utils](./docs/utils.md): semver, guards, timing, concurrency, result
-
----
-
-## 🧪 Testing
-
-- Unit tests colocated near source files
-- Integration and e2e in `packages/kernel/tests/`
-
-Run all tests from the repo root or package:
-
-```sh
-pnpm -w test --filter @zern/kernel
-```
-
----
-
-## 📦 Packages
-
-- `packages/ts-ls`: TypeScript Language Service plugin that serves virtual type augmentations for Zern Kernel during development. See `packages/ts-ls/README.md`.
-
----
-
-## 🔧 Minimal API Reference
-
-- Kernel
-  - `getKernel() → KernelBuilder`
-  - `ensureKernel() → Promise<Kernel>`
-  - `withKernel(select) → Promise<T>`
-  - `builder.use(Plugin, { before?, after? }) → KernelBuilder`
-  - `builder.build() → Kernel`
-  - `kernel.init()/destroy()`
-  - `kernel.plugins.<name>` (typed access to plugins)
-- Plugin
-  - `plugin.definePlugin({ name, version, dependsOn?, errors?, augments?, setup(ctx) { return API } })`
-  - `ctx.extend(target, api)` to safely extend other plugins
-- Errors
-  - `errors.defineErrors(ns, spec)` → `{ spec, factories }`
-  - Kernel.errors: `.on(factory, handler)`, `.report(token, meta?)`, `.fail(token, meta?)`
-  - Global helpers: `report`, `fail`, `once`, `on` with keys `'ns.kind'`
-  - Bound helpers: `createErrorHelpers(kernel)` for autocomplete and inferred payloads
-
-For full details, see the docs in `./docs/`.
-
----
-
-## Security & Quality Gates
-
-- Tests and coverage in CI; coverage badge published.
-- Static analysis: CodeQL workflow.
-- OpenSSF Scorecard workflow.
-- Supply chain: SBOM (CycloneDX) with Syft; lockfile and Dependabot.
-- Benchmarks: lifecycle and throughput (`tools/benchmarks/`).
-
-Generate a local SBOM:
+### Installation
 
 ```bash
-pnpm sbom
-# or via Docker
-pnpm sbom:docker
+npm install @zern/kernel
 ```
 
-## 📄 License
+### Basic Usage
 
-MIT
+```typescript
+import { createKernel, plugin } from '@zern/kernel';
+
+// Create a database plugin
+const DatabasePlugin = plugin('database', '1.0.0')
+  .setup(() => ({
+    async connect(url: string) {
+      console.log(`Connected to: ${url}`);
+      return { connected: true };
+    },
+    
+    users: {
+      async create(userData: any) {
+        const id = Math.random().toString(36);
+        console.log(`User created: ${id}`);
+        return { id, ...userData };
+      }
+    }
+  }));
+
+// Create auth plugin with dependency
+const AuthPlugin = plugin('auth', '1.0.0')
+  .depends(DatabasePlugin)
+  .setup(({ database }) => ({
+    async validateToken(token: string) {
+      // Use database dependency
+      console.log(`Validating token: ${token}`);
+      return token === 'valid-token';
+    }
+  }));
+
+// Initialize kernel
+const kernel = createKernel()
+  .plugin(DatabasePlugin)
+  .plugin(AuthPlugin)
+  .build();
+
+await kernel.init(); // Automatically becomes global
+
+// Use plugins directly
+const dbApi = kernel.getPlugin('database');
+await dbApi.connect('postgresql://localhost:5432/mydb');
+
+const user = await dbApi.users.create({ 
+  name: 'John Doe', 
+  email: 'john@example.com' 
+});
+
+const authApi = kernel.getPlugin('auth');
+const isValid = await authApi.validateToken('valid-token');
+```
+
+### Natural Plugin Usage
+
+Export functions from plugins for natural usage:
+
+```typescript
+// database-plugin/index.ts
+import { getGlobalKernel } from '@zern/kernel';
+
+export const DatabasePlugin = plugin('database', '1.0.0')
+  .setup(() => ({ /* ... */ }));
+
+// Export natural functions
+export async function connect(url: string) {
+  const kernel = getGlobalKernel();
+  return kernel.getPlugin('database').connect(url);
+}
+
+export const users = {
+  async create(userData: any) {
+    const kernel = getGlobalKernel();
+    return kernel.getPlugin('database').users.create(userData);
+  }
+};
+
+// Usage in application
+import { connect, users } from 'database-plugin';
+
+await connect('postgresql://localhost:5432/mydb');
+const user = await users.create({ name: 'John' });
+```
+
+## Plugin Augmentation
+
+Plugins can extend other plugins transparently:
+
+```typescript
+// Plugin that augments database with preferences
+const UserPreferencesPlugin = plugin('userPreferences', '1.0.0')
+  .depends(DatabasePlugin)
+  .augments('database', ({ database }) => ({
+    users: {
+      // Extends database.users with new method
+      async findWithPreferences(id: string) {
+        const user = await database.users.findById(id);
+        const prefs = await database.query('SELECT * FROM preferences WHERE user_id = ?', [id]);
+        return { ...user, preferences: prefs };
+      }
+    }
+  }))
+  .setup(() => ({}));
+
+// After augmentation, the new method is available automatically
+const userWithPrefs = await database.users.findWithPreferences('123');
+```
+
+## API Reference
+
+### Core Functions
+
+#### `createKernel()`
+Creates a new kernel builder.
+
+```typescript
+const kernel = createKernel()
+  .plugin(MyPlugin)
+  .build();
+```
+
+#### `plugin(name, version)`
+Creates a new plugin with fluent API.
+
+```typescript
+const MyPlugin = plugin('myPlugin', '1.0.0')
+  .depends(OtherPlugin)
+  .augments('target', ({ target }) => ({ newMethod: () => {} }))
+  .setup(({ otherPlugin }) => ({
+    myMethod: () => 'hello'
+  }));
+```
+
+#### `getGlobalKernel()`
+Returns the global kernel instance (set automatically by `kernel.init()`).
+
+```typescript
+const kernel = getGlobalKernel();
+const api = kernel.getPlugin('myPlugin');
+```
+
+### Kernel Methods
+
+#### `kernel.register(plugin)`
+Registers a plugin with the kernel.
+
+#### `kernel.init()`
+Initializes all plugins and sets as global kernel automatically.
+
+#### `kernel.getPlugin<T>(name)`
+Gets a plugin API by name.
+
+#### `kernel.destroy()`
+Destroys all plugins and clears state.
+
+## Advanced Features
+
+### Intelligent Dependency Resolution
+
+The kernel features a sophisticated dependency resolution system with:
+
+#### Version Constraints
+```typescript
+const DatabasePlugin = plugin('database', '1.5.2')
+  .setup(() => ({ connect, query, users }));
+
+const AuthPlugin = plugin('auth', '3.1.0')
+  .depends(DatabasePlugin, '^1.0.0') // Accepts any 1.x.x version
+  .setup(({ database }) => ({ validateToken, createSession }));
+
+const CachePlugin = plugin('cache', '2.0.1')
+  .depends(DatabasePlugin, '>=1.5.0') // Needs 1.5.0 or higher
+  .setup(({ database }) => ({ get, set }));
+```
+
+#### Load Order Control
+```typescript
+const kernel = createKernel()
+  .plugin(DatabasePlugin)
+  .plugin(CachePlugin) // Loads after Database (dependency)
+  .plugin(MetricsPlugin, { 
+    loadAfter: [DatabasePlugin], // Force load after Database
+    loadBefore: [AuthPlugin]     // Force load before Auth
+  })
+  .plugin(AuthPlugin) // Loads after Database, Cache, and Metrics
+  .build();
+
+// Resolved order: Database → Cache → Metrics → Auth
+```
+
+#### Intelligent Conflict Detection
+The system detects and provides helpful suggestions for:
+- **Version conflicts**: Incompatible version constraints with upgrade suggestions
+- **Missing dependencies**: Clear identification with registration instructions
+- **Circular dependencies**: Complete cycle detection with resolution suggestions
+- **Load order conflicts**: Contradictory constraints with specific recommendations
+
+```typescript
+// Example error messages:
+// "Version conflict: Plugin 'auth' requires 'database' ^2.0.0, but found version 1.5.2. 
+//  Suggestion: Upgrade DatabasePlugin to version 2.x.x or change auth dependency to '^1.0.0'"
+
+// "Circular dependency detected: auth → cache → database → auth. 
+//  Suggestion: Remove one of the dependencies or use loadAfter/loadBefore instead"
+```
+
+### Error Handling
+
+The kernel provides clear error messages for common issues:
+
+- Missing dependencies
+- Circular dependencies  
+- Duplicate plugin registration
+- Accessing uninitialized kernel
+
+### TypeScript Support
+
+Full TypeScript support with autocomplete:
+
+```typescript
+// Plugins are fully typed
+const api = kernel.getPlugin('database'); // Typed as DatabaseAPI
+await api.connect(url); // Autocomplete available
+
+// Dependencies are typed in setup
+const MyPlugin = plugin('my', '1.0.0')
+  .depends(DatabasePlugin)
+  .setup(({ database }) => {
+    // database is fully typed with autocomplete
+    return { /* ... */ };
+  });
+```
+
+## Examples
+
+See the [examples](./examples) directory for complete usage examples:
+
+- [Basic Usage](./examples/basic-usage.ts) - Simple plugin creation and usage
+- More examples coming soon...
+
+## Contributing
+
+Contributions are welcome! Please read our contributing guidelines and submit pull requests.
+
+## License
+
+MIT © BiteCraft

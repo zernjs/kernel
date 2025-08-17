@@ -11,28 +11,14 @@
     "declaration": true,
     "declarationMap": true,
     "skipLibCheck": true,
+    "downlevelIteration": true,
     "baseUrl": ".",
     "typeRoots": ["./src/types", "./node_modules/@types"],
-    "types": ["node", "vitest"],
+    "types": ["node"],
     "paths": {
       "@/*": ["src/*"],
-      "@tests/*": ["tests/*"],
       "@core/*": ["src/core/*"],
-      "@core": ["src/core"],
-      "@diagnostics/*": ["src/diagnostics/*"],
-      "@diagnostics": ["src/diagnostics"],
-      "@errors/*": ["src/errors/*"],
-      "@errors": ["src/errors"],
-      "@lifecycle/*": ["src/lifecycle/*"],
-      "@lifecycle": ["src/lifecycle"],
-      "@plugin/*": ["src/plugin/*"],
-      "@plugin": ["src/plugin"],
-      "@resolver/*": ["src/resolve/*"],
-      "@resolver": ["src/resolve"],
-      "@types/*": ["src/types/*"],
-      "@types": ["src/types"],
-      "@utils/*": ["src/utils/*"],
-      "@utils": ["src/utils"]
+      "@core": ["src/core"]
     }
   },
   "include": [
