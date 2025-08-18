@@ -19,8 +19,8 @@ const mathPlugin = plugin('math')
 // Plugin que estende o math com novas operações
 const extendedMathPlugin = plugin('extended-math')
   .version('1.0.0')
-  .depends(mathPlugin, '1.0.0')
-  .extend(mathPlugin, _api => {
+  .depends(mathPlugin)
+  .extend(mathPlugin, mathApi => {
     return {
       square: (n: number): number => n * n,
       cube: (n: number): number => n * n * n,

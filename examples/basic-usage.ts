@@ -1,149 +1,48 @@
-/**
- * Basic Kernel Usage Example
- *
- * This example demonstrates the fundamental usage of the Zern Kernel
- * with simple plugins that don't have dependencies.
- */
+import { plugin, createKernel } from '../dist/index.js';
 
-import { ZernKernel, plugin } from '../src/index.js';
+// Plugin de logger simples
+const loggerPlugin = plugin('logger', '1.0.0').setup(_deps => {
+  return {
+    log: (message: string): void => console.log(`[LOG] ${message}`),
+    error: (message: string): void => console.error(`[ERROR] ${message}`),
+  };
+});
 
-// Create a simple logger plugin
-const loggerPlugin = plugin('logger')
-  .version('1.0.0')
-  .setup(async () => {
-    console.log('🔧 Logger plugin initialized');
-
+// Plugin de matemática simples
+const mathPlugin = plugin('math', '1.0.0')
+  .depends(loggerPlugin)
+  .setup(_deps => {
     return {
-      log: (message: string): void => {
-        console.log(`[LOG] ${new Date().toISOString()}: ${message}`);
-      },
-      error: (message: string): void => {
-        console.error(`[ERROR] ${new Date().toISOString()}: ${message}`);
-      },
-      warn: (message: string): void => {
-        console.warn(`[WARN] ${new Date().toISOString()}: ${message}`);
-      },
+      add: (a: number, b: number): number => a + b,
+      multiply: (a: number, b: number): number => a * b,
     };
   })
-  .destroy(async () => {
-    console.log('🔧 Logger plugin destroyed');
-  })
-  .build();
-
-// Create a simple metrics plugin
-const metricsPlugin = plugin('metrics')
-  .version('1.0.0')
-  .setup(async () => {
-    console.log('📊 Metrics plugin initialized');
-
-    const metrics = new Map<string, number>();
-
+  .extend(loggerPlugin, api => {
     return {
-      increment: (key: string, value = 1): void => {
-        const current = metrics.get(key) || 0;
-        metrics.set(key, current + value);
-      },
-      get: (key: string): number => metrics.get(key) || 0,
-      getAll: (): Record<string, number> => Object.fromEntries(metrics.entries()),
-      reset: (): void => metrics.clear(),
+      newLog: (message: string): void => api.log(`[MATH] ${message}`),
     };
-  })
-  .destroy(async () => {
-    console.log('📊 Metrics plugin destroyed');
-  })
-  .build();
+  });
 
-// Create a simple config plugin
-const configPlugin = plugin('config')
-  .version('1.0.0')
-  .setup(async () => {
-    console.log('⚙️ Config plugin initialized');
+async function runExample(): Promise<void> {
+  // Criar e inicializar kernel com o novo método start() (combina build + init)
+  const kernel = await createKernel().use(loggerPlugin).use(mathPlugin).start();
 
-    const config = new Map<string, unknown>();
+  // Alternativa: usar build().init() separadamente
+  // const kernel = await createKernel().use(loggerPlugin).use(mathPlugin).build().init();
 
-    // Set some default values
-    config.set('app.name', 'Zern Kernel Example');
-    config.set('app.version', '1.0.0');
-    config.set('debug', true);
+  // Usar os plugins
+  const logger = kernel.get('logger');
+  const math = kernel.get('math');
 
-    return {
-      get: <T = unknown>(key: string, defaultValue?: T): T => {
-        return (config.get(key) ?? defaultValue) as T;
-      },
-      set: (key: string, value: unknown): void => {
-        config.set(key, value);
-      },
-      has: (key: string): boolean => config.has(key),
-      delete: (key: string): boolean => config.delete(key),
-      getAll: (): Record<string, unknown> => Object.fromEntries(config.entries()),
-    };
-  })
-  .destroy(async () => {
-    console.log('⚙️ Config plugin destroyed');
-  })
-  .build();
+  logger.log('Exemplo iniciado');
 
-async function runBasicExample(): Promise<void> {
-  console.log('🚀 Starting Basic Kernel Example\n');
+  const result1 = math.add(2, 3);
+  logger.log(`2 + 3 = ${result1}`);
 
-  try {
-    // Create and configure kernel using fluent API
-    console.log('📦 Creating kernel with plugins...');
-    const kernel = ZernKernel()
-      .plugin(loggerPlugin)
-      .plugin(metricsPlugin)
-      .plugin(configPlugin)
-      .build();
+  const result2 = math.multiply(4, 5);
+  logger.log(`4 * 5 = ${result2}`);
 
-    // Initialize kernel
-    console.log('\n🔄 Initializing kernel...');
-    await kernel.initialize();
-
-    // Get plugin APIs using automatic type inference
-    const logger = kernel.plugins.get('logger');
-    const metrics = kernel.plugins.get('metrics');
-    const config = kernel.plugins.get('config');
-
-    console.log('\n✅ Kernel initialized successfully!\n');
-
-    // Demonstrate plugin usage
-    console.log('🎯 Demonstrating plugin functionality:\n');
-
-    // Use logger
-    logger?.log('Application started successfully');
-    logger?.warn('This is a warning message');
-
-    // Use config
-    const appName = config?.get('app.name');
-    const debugMode = config?.get('debug');
-    logger?.log(`App: ${appName}, Debug: ${debugMode}`);
-
-    // Use metrics
-    metrics?.increment('requests');
-    metrics?.increment('requests');
-    metrics?.increment('errors');
-
-    const allMetrics = metrics?.getAll();
-    logger?.log(`Current metrics: ${JSON.stringify(allMetrics)}`);
-
-    // Show kernel state
-    console.log(`\n📊 Kernel State: ${kernel.currentState}`);
-    console.log(`📦 Registered Plugins: ${kernel.getPluginNames().join(', ')}`);
-
-    // Cleanup
-    console.log('\n🧹 Cleaning up...');
-    await kernel.destroy();
-
-    console.log('\n✅ Example completed successfully!');
-  } catch (error) {
-    console.error('❌ Error running example:', error);
-    process.exit(1);
-  }
+  logger.log('Exemplo concluído');
 }
 
-// Run the example
-if (import.meta.url.endsWith('basic-usage.ts')) {
-  runBasicExample().catch(console.error);
-}
-
-export { runBasicExample };
+runExample().catch(console.error);
