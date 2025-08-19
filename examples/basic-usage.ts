@@ -1,4 +1,4 @@
-import { plugin, createKernel } from '../dist';
+import { plugin, createKernel } from '../src';
 
 // Logger Plugin
 const loggerPlugin = plugin('logger', '1.0.0').setup(() => ({
