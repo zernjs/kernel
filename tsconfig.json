@@ -18,7 +18,14 @@
     "paths": {
       "@/*": ["src/*"],
       "@core/*": ["src/core/*"],
-      "@core": ["src/core"]
+      "@extension": ["src/extension"],
+      "@extension/*": ["src/extension/*"],
+      "@kernel": ["src/kernel"],
+      "@kernel/*": ["src/kernel/*"],
+      "@plugin": ["src/plugin"],
+      "@plugin/*": ["src/plugin/*"],
+      "@utils": ["src/utils"],
+      "@utils/*": ["src/utils/*"]
     }
   },
   "include": [

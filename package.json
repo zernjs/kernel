@@ -1,6 +1,6 @@
 {
   "name": "@zern/kernel",
-  "version": "1.0.0-alpha.2",
+  "version": "1.0.0-alpha.3",
   "description": "Ultra-lightweight plugin engine with natural DX and auto-extensibility",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -44,23 +44,17 @@
   ],
   "author": "BiteCraft",
   "license": "MIT",
-  "dependencies": {
-    "remove": "^0.1.5",
-    "tslib": "^2.8.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@eslint/js": "^9.33.0",
     "@types/node": "^24.2.1",
     "@typescript-eslint/eslint-plugin": "^8.39.0",
     "@typescript-eslint/parser": "^8.39.0",
     "@vitest/coverage-v8": "3.2.4",
-    "@zern/tsls": "link:..\\zern-tsls",
-    "concurrently": "^8.2.2",
     "coverage-badges-cli": "^2.1.0",
     "eslint": "^9.33.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
-    "fast-check": "^4.2.0",
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.0",
