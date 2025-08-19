@@ -1,12 +1,12 @@
-import { plugin, createKernel } from '@/index';
+import { plugin, createKernel } from '../dist';
 
-// Plugin de logger
+// Logger Plugin
 const loggerPlugin = plugin('logger', '1.0.0').setup(() => ({
   log: (msg: string): void => console.log(`[LOG] ${msg}`),
   error: (msg: string): void => console.error(`[ERROR] ${msg}`),
 }));
 
-// Plugin de matemática com dependência
+// Math plugin with dependencies
 const mathPlugin = plugin('math', '1.0.0')
   .depends(loggerPlugin, '^1.0.0')
   .setup(({ plugins }) => ({
@@ -20,7 +20,8 @@ const mathPlugin = plugin('math', '1.0.0')
     },
   }));
 
-// Plugin que estende matemática
+// Advanced Math plugin with dependencies
+// This plugin extends the math plugin API
 const advancedMathPlugin = plugin('advanced-math', '1.0.0')
   .depends(mathPlugin, '^1.0.0')
   .extend(mathPlugin, _mathApi => {
@@ -39,7 +40,7 @@ const advancedMathPlugin = plugin('advanced-math', '1.0.0')
     };
   });
 
-// Criar e inicializar kernel
+// Create and initialize kernel
 const kernel = await createKernel()
   .use(loggerPlugin)
   .use(mathPlugin)
@@ -47,16 +48,19 @@ const kernel = await createKernel()
   .withConfig({ logLevel: 'debug' })
   .start();
 
-// Usar plugins com type safety completo
-const logger = kernel.get('logger'); // Tipo inferido automaticamente
-const math = kernel.get('math'); // Inclui métodos estendidos
+// Use plugins with type safety
+const logger = kernel.get('logger'); // Type inference
+const math = kernel.get('math'); // Includes extended methods
+const advancedMath = kernel.get('advanced-math'); // Includes extended methods
 
 logger.log('Kernel initialized!');
-const result = math.add(2, 3); // Autocomplete funciona
-const power = math.power(2, 3); // Método estendido disponível
+const result = math.add(2, 3); // Autocomplete works
+const power = math.power(2, 3); // Extended method available
+const factorial = advancedMath.factorial(5); // Extended method available
 
 console.log(`2 + 3 = ${result}`);
 console.log(`2^3 = ${power}`);
+console.log(`5! = ${factorial}`);
 
 // Shutdown graceful
 await kernel.shutdown();

@@ -1,6 +1,5 @@
-<h1 align="center">🔥 Zern Kernel</h1>
-<h3 align="center">Strongly-Typed Plugin Kernel</h3>
-
+# 🔥 Zern Kernel
+## Strongly-Typed Plugin Kernel
 
 > Ultra-lightweight plugin engine with natural DX and auto-extensibility
 
@@ -21,17 +20,16 @@
 
 </div>
 
-
 ## Overview
 
 Zern Kernel is a next-generation plugin system designed for exceptional developer experience. It features a minimal core that allows plugins to be used naturally (like independent libraries), with automatic dependency resolution, transparent augmentations, and complete type safety.
 
 ## Key Features
 
-- **🪶 Minimal Core**: Only essential functionality (register, init, augment)
-- **🔄 Natural DX**: Import and use plugin functions directly
-- **🤖 Auto Resolution**: Global kernel resolves automatically when needed
-- **🔧 Transparent Augmentation**: Plugins can extend others invisibly
+- **🪶 Minimal Core**: Only essential functionality (register, init, shutdown)
+- **🔄 Natural DX**: Access plugin APIs through type-safe kernel.get()
+- **🤖 Auto Resolution**: Automatic dependency resolution and lifecycle management
+- **🔧 Transparent Extensions**: Plugins can extend others with seamless API merging
 - **📝 Zero Boilerplate**: Fluent API eliminates ceremonial code
 - **🛡️ Complete Type Safety**: Full TypeScript support with autocomplete
 
@@ -68,7 +66,7 @@ const DatabasePlugin = plugin('database', '1.0.0')
 // Create auth plugin with dependency
 const AuthPlugin = plugin('auth', '1.0.0')
   .depends(DatabasePlugin)
-  .setup(({ database }) => ({
+  .setup(({ plugins }) => ({
     async validateToken(token: string) {
       // Use database dependency
       console.log(`Validating token: ${token}`);
@@ -77,15 +75,13 @@ const AuthPlugin = plugin('auth', '1.0.0')
   }));
 
 // Initialize kernel
-const kernel = createKernel()
-  .plugin(DatabasePlugin)
-  .plugin(AuthPlugin)
-  .build();
-
-await kernel.init(); // Automatically becomes global
+const kernel = await createKernel()
+  .use(DatabasePlugin)
+  .use(AuthPlugin)
+  .start();
 
 // Use plugins directly
-const dbApi = kernel.getPlugin('database');
+const dbApi = kernel.get('database');
 await dbApi.connect('postgresql://localhost:5432/mydb');
 
 const user = await dbApi.users.create({ 
@@ -93,50 +89,19 @@ const user = await dbApi.users.create({
   email: 'john@example.com' 
 });
 
-const authApi = kernel.getPlugin('auth');
+const authApi = kernel.get('auth');
 const isValid = await authApi.validateToken('valid-token');
 ```
 
-### Natural Plugin Usage
-
-Export functions from plugins for natural usage:
-
-```typescript
-// database-plugin/index.ts
-import { getGlobalKernel } from '@zern/kernel';
-
-export const DatabasePlugin = plugin('database', '1.0.0')
-  .setup(() => ({ /* ... */ }));
-
-// Export natural functions
-export async function connect(url: string) {
-  const kernel = getGlobalKernel();
-  return kernel.getPlugin('database').connect(url);
-}
-
-export const users = {
-  async create(userData: any) {
-    const kernel = getGlobalKernel();
-    return kernel.getPlugin('database').users.create(userData);
-  }
-};
-
-// Usage in application
-import { connect, users } from 'database-plugin';
-
-await connect('postgresql://localhost:5432/mydb');
-const user = await users.create({ name: 'John' });
-```
-
-## Plugin Augmentation
+### Plugin Extensions
 
 Plugins can extend other plugins transparently:
 
 ```typescript
-// Plugin that augments database with preferences
+// Plugin that extends database with preferences
 const UserPreferencesPlugin = plugin('userPreferences', '1.0.0')
   .depends(DatabasePlugin)
-  .augments('database', ({ database }) => ({
+  .extend(DatabasePlugin, (database) => ({
     users: {
       // Extends database.users with new method
       async findWithPreferences(id: string) {
@@ -148,8 +113,9 @@ const UserPreferencesPlugin = plugin('userPreferences', '1.0.0')
   }))
   .setup(() => ({}));
 
-// After augmentation, the new method is available automatically
-const userWithPrefs = await database.users.findWithPreferences('123');
+// After kernel initialization, the extended method is available
+const db = kernel.get('database');
+const userWithPrefs = await db.users.findWithPreferences('123');
 ```
 
 ## API Reference
@@ -160,9 +126,10 @@ const userWithPrefs = await database.users.findWithPreferences('123');
 Creates a new kernel builder.
 
 ```typescript
-const kernel = createKernel()
-  .plugin(MyPlugin)
-  .build();
+const kernel = await createKernel()
+  .use(MyPlugin)
+  .withConfig({ logLevel: 'debug' })
+  .start();
 ```
 
 #### `plugin(name, version)`
@@ -171,33 +138,104 @@ Creates a new plugin with fluent API.
 ```typescript
 const MyPlugin = plugin('myPlugin', '1.0.0')
   .depends(OtherPlugin)
-  .augments('target', ({ target }) => ({ newMethod: () => {} }))
-  .setup(({ otherPlugin }) => ({
+  .extend(TargetPlugin, (api) => ({ newMethod: () => {} }))
+  .setup(({ plugins }) => ({
     myMethod: () => 'hello'
   }));
 ```
 
-#### `getGlobalKernel()`
-Returns the global kernel instance (set automatically by `kernel.init()`).
+### Kernel Builder Methods
+
+#### `use(plugin)`
+Registers a plugin with the kernel.
 
 ```typescript
-const kernel = getGlobalKernel();
-const api = kernel.getPlugin('myPlugin');
+const kernel = createKernel()
+  .use(DatabasePlugin)
+  .use(AuthPlugin);
+```
+
+#### `withConfig(config)`
+Sets kernel configuration options.
+
+```typescript
+const kernel = createKernel()
+  .withConfig({
+    logLevel: 'debug',
+    strictVersioning: true,
+    initializationTimeout: 30000
+  });
+```
+
+#### `build()`
+Builds the kernel without initializing it.
+
+```typescript
+const builtKernel = createKernel()
+  .use(MyPlugin)
+  .build();
+
+const kernel = await builtKernel.init();
+```
+
+#### `start()`
+Builds and initializes the kernel in one step.
+
+```typescript
+const kernel = await createKernel()
+  .use(MyPlugin)
+  .start();
 ```
 
 ### Kernel Methods
 
-#### `kernel.register(plugin)`
-Registers a plugin with the kernel.
+#### `kernel.get<T>(name)`
+Gets a plugin API by name with full type safety.
 
-#### `kernel.init()`
-Initializes all plugins and sets as global kernel automatically.
+```typescript
+const api = kernel.get('myPlugin'); // Fully typed
+```
 
-#### `kernel.getPlugin<T>(name)`
-Gets a plugin API by name.
+#### `kernel.shutdown()`
+Shuts down all plugins and clears state.
 
-#### `kernel.destroy()`
-Destroys all plugins and clears state.
+```typescript
+await kernel.shutdown();
+```
+
+### Plugin Builder Methods
+
+#### `depends(plugin, versionRange?)`
+Declares a dependency on another plugin.
+
+```typescript
+const MyPlugin = plugin('my', '1.0.0')
+  .depends(DatabasePlugin, '^1.0.0')
+  .setup(({ plugins }) => {
+    // plugins.database is available and typed
+  });
+```
+
+#### `extend(target, extensionFn)`
+Extends another plugin's API.
+
+```typescript
+const ExtenderPlugin = plugin('extender', '1.0.0')
+  .extend(TargetPlugin, (api) => ({
+    newMethod: () => api.existingMethod() + ' extended'
+  }))
+  .setup(() => ({}));
+```
+
+#### `setup(setupFn)`
+Defines the plugin's implementation.
+
+```typescript
+const MyPlugin = plugin('my', '1.0.0')
+  .setup(({ plugins, kernel }) => ({
+    doSomething: () => 'result'
+  }));
+```
 
 ## Advanced Features
 
@@ -212,34 +250,18 @@ const DatabasePlugin = plugin('database', '1.5.2')
 
 const AuthPlugin = plugin('auth', '3.1.0')
   .depends(DatabasePlugin, '^1.0.0') // Accepts any 1.x.x version
-  .setup(({ database }) => ({ validateToken, createSession }));
+  .setup(({ plugins }) => ({ validateToken, createSession }));
 
 const CachePlugin = plugin('cache', '2.0.1')
   .depends(DatabasePlugin, '>=1.5.0') // Needs 1.5.0 or higher
-  .setup(({ database }) => ({ get, set }));
+  .setup(({ plugins }) => ({ get, set }));
 ```
 
-#### Load Order Control
-```typescript
-const kernel = createKernel()
-  .plugin(DatabasePlugin)
-  .plugin(CachePlugin) // Loads after Database (dependency)
-  .plugin(MetricsPlugin, { 
-    loadAfter: [DatabasePlugin], // Force load after Database
-    loadBefore: [AuthPlugin]     // Force load before Auth
-  })
-  .plugin(AuthPlugin) // Loads after Database, Cache, and Metrics
-  .build();
-
-// Resolved order: Database → Cache → Metrics → Auth
-```
-
-#### Intelligent Conflict Detection
+#### Intelligent Error Detection
 The system detects and provides helpful suggestions for:
 - **Version conflicts**: Incompatible version constraints with upgrade suggestions
 - **Missing dependencies**: Clear identification with registration instructions
 - **Circular dependencies**: Complete cycle detection with resolution suggestions
-- **Load order conflicts**: Contradictory constraints with specific recommendations
 
 ```typescript
 // Example error messages:
@@ -247,17 +269,21 @@ The system detects and provides helpful suggestions for:
 //  Suggestion: Upgrade DatabasePlugin to version 2.x.x or change auth dependency to '^1.0.0'"
 
 // "Circular dependency detected: auth → cache → database → auth. 
-//  Suggestion: Remove one of the dependencies or use loadAfter/loadBefore instead"
+//  Suggestion: Remove one of the dependencies or restructure plugin relationships"
 ```
 
-### Error Handling
+### Configuration Options
 
-The kernel provides clear error messages for common issues:
-
-- Missing dependencies
-- Circular dependencies  
-- Duplicate plugin registration
-- Accessing uninitialized kernel
+```typescript
+interface KernelConfig {
+  autoGlobal: boolean;          // Auto-register as global kernel
+  strictVersioning: boolean;    // Enforce strict version matching
+  circularDependencies: boolean; // Allow circular dependencies
+  initializationTimeout: number; // Timeout in milliseconds
+  extensionsEnabled: boolean;   // Enable plugin extensions
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
+}
+```
 
 ### TypeScript Support
 
@@ -265,14 +291,14 @@ Full TypeScript support with autocomplete:
 
 ```typescript
 // Plugins are fully typed
-const api = kernel.getPlugin('database'); // Typed as DatabaseAPI
+const api = kernel.get('database'); // Typed as DatabaseAPI
 await api.connect(url); // Autocomplete available
 
 // Dependencies are typed in setup
 const MyPlugin = plugin('my', '1.0.0')
   .depends(DatabasePlugin)
-  .setup(({ database }) => {
-    // database is fully typed with autocomplete
+  .setup(({ plugins }) => {
+    // plugins.database is fully typed with autocomplete
     return { /* ... */ };
   });
 ```
@@ -281,7 +307,7 @@ const MyPlugin = plugin('my', '1.0.0')
 
 See the [examples](./examples) directory for complete usage examples:
 
-- [Basic Usage](./examples/basic-usage.ts) - Simple plugin creation and usage
+- [Basic Usage](./examples/basic-usage.ts) - Plugin creation, dependencies, and extensions
 - More examples coming soon...
 
 ## Contributing
