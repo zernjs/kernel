@@ -12,7 +12,6 @@ export default defineConfig({
         'node_modules/',
         'dist/',
         'examples/**',
-        'tools/**',
         '**/*.d.ts',
         '**/*.config.*',
         '**/index.ts',
@@ -33,6 +32,10 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './src'),
       '@core': resolve(__dirname, './src/core'),
+      '@extension': resolve(__dirname, './src/extension'),
+      '@kernel': resolve(__dirname, './src/kernel'),
+      '@plugin': resolve(__dirname, './src/plugin'),
+      '@utils': resolve(__dirname, './src/utils'),
     },
   },
   plugins: [],

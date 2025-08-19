@@ -1,107 +1,91 @@
 /**
- * @file Zern Kernel - Pure plugin engine with automatic dependency resolution.
- *
- * The Zern Kernel is a lightweight, type-safe plugin system that provides:
- * - Automatic plugin discovery and dependency resolution
- * - Lifecycle management with state tracking
- * - Plugin extension and hot-reload capabilities
- * - Zero-configuration setup with intelligent defaults
- * - Complete type safety with branded types
+ * Exports públicos do Zern Kernel
+ * API limpa e organizada para consumidores
  */
 
-// Core builders following new API specification
-export {
-  plugin,
-  type IPluginBuilder,
-  PluginBuilderError,
-} from './application/builders/plugin.builder.js';
-
-export {
-  createKernel,
-  createProductionKernel,
-  createDevelopmentKernel,
-  createTestKernel,
-  quickKernel,
-  type IKernelBuilder,
-  type IBuiltKernel,
-  KernelBuilderError,
-} from './application/builders/kernel.builder.js';
-
-// Domain types and entities
-export type {
-  Plugin,
-  PluginDependency,
-  PluginExtension,
-  PluginMetadata,
-  PluginLifecycle,
-  PluginConfig,
-  PluginRegistrationOptions,
-  PluginDependencyContext,
-  PluginSetupFunction,
-  TypedPlugin,
-  ExtensionCallback,
-} from './domain/plugin/plugin.types.js';
-
-export type {
-  KernelConfig,
-  KernelMetadata,
-  KernelLifecycle,
-} from './domain/kernel/kernel.types.js';
-
-export { KernelEntity } from './domain/kernel/kernel.entity.js';
-
-// Shared types and utilities
+// Core exports
 export type {
   PluginId,
   KernelId,
   Version,
-  PluginName,
-  LifecycleState,
-  BaseConfig,
-  BaseMetadata,
-  SetupFunction,
-} from './shared/types/common.types.js';
+  KernelContext,
+  KernelConfig,
+  PluginState,
+  PluginMetadata,
+  PluginDependency,
+  PluginExtension,
+} from '@/core';
 
-export {
-  createPluginId,
-  createKernelId,
-  createVersion,
-  createPluginName,
-} from './shared/types/common.types.js';
-
-export type { Result } from './shared/types/result.types.js';
-
+export type { Result } from '@/core';
 export {
   success,
   failure,
   isSuccess,
   isFailure,
   mapResult,
-  mapError,
-} from './shared/types/result.types.js';
+  chainResult,
+  collectResults,
+} from '@/core';
 
-// Repository interfaces
-export type { PluginRepository, RepositoryError } from './domain/plugin/plugin.repository.js';
-
-export type { KernelRepository, KernelRepositoryError } from './domain/kernel/kernel.repository.js';
-
-// Repository implementations
 export {
-  InMemoryPluginRepository,
-  InMemoryKernelRepository,
-} from './infrastructure/repositories/index.js';
+  ZernError,
+  PluginError,
+  PluginNotFoundError,
+  PluginLoadError,
+  PluginDependencyError,
+  KernelError,
+  KernelInitializationError,
+  CircularDependencyError,
+  VersionError,
+  VersionMismatchError,
+} from '@/core';
 
-// Services
-export { PluginService } from './application/services/plugin.service.js';
-export { KernelService } from './application/services/kernel.service.js';
-export { ExtensionService } from './application/services/extension.service.js';
+// Plugin exports
+export type { PluginSetupContext, BuiltPlugin, PluginBuilder } from '@/plugin';
+export { plugin } from '@/plugin';
 
-// Dependency injection
+export type { PluginRegistry } from '@/plugin';
+export { createPluginRegistry } from '@/plugin';
+
+export type { DependencyResolver } from '@/plugin';
+export { createDependencyResolver } from '@/plugin';
+
+// Kernel exports
+export type { Kernel, BuiltKernel, KernelBuilder } from '@/kernel';
+export { createKernel } from '@/kernel';
+
+export type { PluginContainer } from '@/kernel';
+export { createPluginContainer } from '@/kernel';
+
+export type { LifecycleManager } from '@/kernel';
+export { createLifecycleManager } from '@/kernel';
+
+// Extension exports
+export type { ExtensionManager } from '@/extension';
+export { createExtensionManager } from '@/extension';
+
+// Utility exports
+export type { SemanticVersion } from '@/utils';
+export { parseVersion, compareVersions, satisfiesVersion, isValidVersionRange } from '@/utils';
+
 export {
-  createContainer,
-  getGlobalContainer,
-  type ServiceContainer,
-} from './infrastructure/di/container.js';
+  isValidPluginName,
+  isValidKernelId,
+  validatePluginName,
+  validateKernelId,
+  isNonEmptyString,
+  isObject,
+  isFunction,
+} from '@/utils';
 
-// Convenience aliases for better DX
-export { createKernel as kernel } from './application/builders/kernel.builder.js';
+export {
+  isPluginState,
+  isPluginDependency,
+  isPluginExtension,
+  isPluginMetadata,
+  isBuiltPlugin,
+  isResult,
+} from '@/utils';
+
+// Convenience exports
+export { createPluginId, createKernelId, createVersion } from './core/types.js';

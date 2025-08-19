@@ -1,48 +1,62 @@
-import { plugin, createKernel } from '../dist/index.js';
+import { plugin, createKernel } from '@/index';
 
-// Plugin de logger simples
-const loggerPlugin = plugin('logger', '1.0.0').setup(_deps => {
-  return {
-    log: (message: string): void => console.log(`[LOG] ${message}`),
-    error: (message: string): void => console.error(`[ERROR] ${message}`),
-  };
-});
+// Plugin de logger
+const loggerPlugin = plugin('logger', '1.0.0').setup(() => ({
+  log: (msg: string): void => console.log(`[LOG] ${msg}`),
+  error: (msg: string): void => console.error(`[ERROR] ${msg}`),
+}));
 
-// Plugin de matemática simples
+// Plugin de matemática com dependência
 const mathPlugin = plugin('math', '1.0.0')
-  .depends(loggerPlugin)
-  .setup(_deps => {
+  .depends(loggerPlugin, '^1.0.0')
+  .setup(({ plugins }) => ({
+    add: (a: number, b: number): number => {
+      plugins.logger.log(`Adding ${a} + ${b}`);
+      return a + b;
+    },
+    multiply: (a: number, b: number): number => {
+      plugins.logger.log(`Multiplying ${a} * ${b}`);
+      return a * b;
+    },
+  }));
+
+// Plugin que estende matemática
+const advancedMathPlugin = plugin('advanced-math', '1.0.0')
+  .depends(mathPlugin, '^1.0.0')
+  .extend(mathPlugin, _mathApi => {
     return {
-      add: (a: number, b: number): number => a + b,
-      multiply: (a: number, b: number): number => a * b,
+      power: (base: number, exp: number): number => Math.pow(base, exp),
+      sqrt: (value: number): number => Math.sqrt(value),
     };
   })
-  .extend(loggerPlugin, api => {
+  .setup(() => {
+    function factorial(n: number): number {
+      return n <= 1 ? 1 : n * factorial(n - 1);
+    }
+
     return {
-      newLog: (message: string): void => api.log(`[MATH] ${message}`),
+      factorial,
     };
   });
 
-async function runExample(): Promise<void> {
-  // Criar e inicializar kernel com o novo método start() (combina build + init)
-  const kernel = await createKernel().use(loggerPlugin).use(mathPlugin).start();
+// Criar e inicializar kernel
+const kernel = await createKernel()
+  .use(loggerPlugin)
+  .use(mathPlugin)
+  .use(advancedMathPlugin)
+  .withConfig({ logLevel: 'debug' })
+  .start();
 
-  // Alternativa: usar build().init() separadamente
-  // const kernel = await createKernel().use(loggerPlugin).use(mathPlugin).build().init();
+// Usar plugins com type safety completo
+const logger = kernel.get('logger'); // Tipo inferido automaticamente
+const math = kernel.get('math'); // Inclui métodos estendidos
 
-  // Usar os plugins
-  const logger = kernel.get('logger');
-  const math = kernel.get('math');
+logger.log('Kernel initialized!');
+const result = math.add(2, 3); // Autocomplete funciona
+const power = math.power(2, 3); // Método estendido disponível
 
-  logger.log('Exemplo iniciado');
+console.log(`2 + 3 = ${result}`);
+console.log(`2^3 = ${power}`);
 
-  const result1 = math.add(2, 3);
-  logger.log(`2 + 3 = ${result1}`);
-
-  const result2 = math.multiply(4, 5);
-  logger.log(`4 * 5 = ${result2}`);
-
-  logger.log('Exemplo concluído');
-}
-
-runExample().catch(console.error);
+// Shutdown graceful
+await kernel.shutdown();
