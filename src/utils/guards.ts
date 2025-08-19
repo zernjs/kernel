@@ -1,52 +1,91 @@
 /**
- * @file Guard helpers for runtime type narrowing.
+ * @file Type guards for validate types in runtime
+ * @description Provides type safety in dynamic operations
  */
 
-type UnknownRecord = Record<string, unknown>;
+import type {
+  PluginMetadata,
+  PluginState,
+  PluginDependency,
+  PluginExtension,
+  Result,
+} from '@/core';
+import type { BuiltPlugin } from '@/plugin';
+import { isObject } from '@/utils';
 
-export function isObject(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null;
+export function isPluginState(value: unknown): value is PluginState {
+  return typeof value === 'string' && ['UNLOADED', 'LOADING', 'LOADED', 'ERROR'].includes(value);
 }
 
-export function isFunction<TArgs extends unknown[] = unknown[], TRet = unknown>(
-  value: unknown
-): value is (...args: TArgs) => TRet {
-  return typeof value === 'function';
+export function isPluginDependency(value: unknown): value is PluginDependency {
+  return (
+    isObject(value) &&
+    'pluginId' in value &&
+    typeof (value as Record<string, unknown>).pluginId === 'string' &&
+    'versionRange' in value &&
+    typeof (value as Record<string, unknown>).versionRange === 'string'
+  );
 }
 
-export function isString(value: unknown): value is string {
-  return typeof value === 'string';
+export function isPluginExtension(value: unknown): value is PluginExtension {
+  return (
+    isObject(value) &&
+    'targetPluginId' in value &&
+    typeof (value as Record<string, unknown>).targetPluginId === 'string' &&
+    'extensionFn' in value &&
+    typeof (value as Record<string, unknown>).extensionFn === 'function'
+  );
 }
 
-export function isNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+export function isPluginMetadata(value: unknown): value is PluginMetadata {
+  return (
+    isObject(value) &&
+    'id' in value &&
+    typeof (value as Record<string, unknown>).id === 'string' &&
+    'name' in value &&
+    typeof (value as Record<string, unknown>).name === 'string' &&
+    'version' in value &&
+    typeof (value as Record<string, unknown>).version === 'string' &&
+    'state' in value &&
+    isPluginState((value as Record<string, unknown>).state) &&
+    'dependencies' in value &&
+    Array.isArray((value as Record<string, unknown>).dependencies) &&
+    'extensions' in value &&
+    Array.isArray((value as Record<string, unknown>).extensions)
+  );
 }
 
-export function hasOwn<T extends object, K extends PropertyKey>(
-  obj: T,
-  key: K
-): key is K & keyof T {
-  return Object.prototype.hasOwnProperty.call(obj, key);
+export function isBuiltPlugin(value: unknown): value is BuiltPlugin<string, unknown> {
+  return (
+    isObject(value) &&
+    'id' in value &&
+    typeof (value as Record<string, unknown>).id === 'string' &&
+    'name' in value &&
+    typeof (value as Record<string, unknown>).name === 'string' &&
+    'version' in value &&
+    typeof (value as Record<string, unknown>).version === 'string' &&
+    'setupFn' in value &&
+    typeof (value as Record<string, unknown>).setupFn === 'function' &&
+    'dependencies' in value &&
+    Array.isArray((value as Record<string, unknown>).dependencies) &&
+    'extensions' in value &&
+    Array.isArray((value as Record<string, unknown>).extensions)
+  );
 }
 
-export function assert(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error(message);
+export function isResult<T, E>(value: unknown): value is Result<T, E> {
+  return (
+    isObject(value) &&
+    'success' in value &&
+    typeof (value as Record<string, unknown>).success === 'boolean' &&
+    ((value as Record<string, unknown>).success === true ? 'data' in value : 'error' in value)
+  );
 }
 
-export function isPromise<T = unknown>(value: unknown): value is Promise<T> {
-  return isObject(value) && 'then' in value && isFunction((value as { then?: unknown }).then);
+export function isSuccess<T, E>(result: Result<T, E>): result is { success: true; data: T } {
+  return result.success;
 }
 
-export function isPlainObject(value: unknown): value is UnknownRecord {
-  if (!isObject(value)) return false;
-  const proto = Object.getPrototypeOf(value);
-  return proto === Object.prototype || proto === null;
-}
-
-export function isIterable<T = unknown>(value: unknown): value is Iterable<T> {
-  return isObject(value) && Symbol.iterator in value;
-}
-
-export function isAsyncIterable<T = unknown>(value: unknown): value is AsyncIterable<T> {
-  return isObject(value) && Symbol.asyncIterator in value;
+export function isFailure<T, E>(result: Result<T, E>): result is { success: false; error: E } {
+  return !result.success;
 }

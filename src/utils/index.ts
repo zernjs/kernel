@@ -1,8 +1,3 @@
-/**
- * @file Utils public entrypoint.
- */
 export * from './guards';
-export * from './result';
-export * from './concurrency';
-export * from './timing';
-export * from './semver';
+export * from './validation';
+export * from './version';

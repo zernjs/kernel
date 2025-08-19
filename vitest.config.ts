@@ -5,20 +5,16 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: [resolve(__dirname, './tests/setup.ts')],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'json-summary', 'html', 'lcov'],
       exclude: [
         'node_modules/',
         'dist/',
-        'tests/',
         'examples/**',
-        'tools/**',
         '**/*.d.ts',
         '**/*.config.*',
         '**/index.ts',
-        'src/**/types.ts',
       ],
       thresholds: {
         statements: 60,
@@ -27,10 +23,7 @@ export default defineConfig({
         lines: 60,
       },
     },
-    include: [
-      'src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
-      'tests/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
-    ],
+    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     exclude: ['node_modules', 'dist'],
     testTimeout: 10000,
     hookTimeout: 10000,
@@ -38,17 +31,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
-      '@tests': resolve(__dirname, './tests'),
-      '@alerts': resolve(__dirname, './src/alerts'),
       '@core': resolve(__dirname, './src/core'),
-      '@diagnostics': resolve(__dirname, './src/diagnostics'),
-      '@errors': resolve(__dirname, './src/errors'),
-      '@events': resolve(__dirname, './src/events'),
-      '@hooks': resolve(__dirname, './src/hooks'),
-      '@lifecycle': resolve(__dirname, './src/lifecycle'),
+      '@extension': resolve(__dirname, './src/extension'),
+      '@kernel': resolve(__dirname, './src/kernel'),
       '@plugin': resolve(__dirname, './src/plugin'),
-      '@resolver': resolve(__dirname, './src/resolve'),
-      '@types': resolve(__dirname, './src/types'),
       '@utils': resolve(__dirname, './src/utils'),
     },
   },

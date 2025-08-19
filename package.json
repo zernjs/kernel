@@ -1,7 +1,7 @@
 {
   "name": "@zern/kernel",
-  "version": "1.0.0-alpha.2",
-  "description": "Next-generation Zern Kernel - Ultra-lightweight plugin engine with auto-extensibility",
+  "version": "1.0.0-alpha.3",
+  "description": "Ultra-lightweight plugin engine with natural DX and auto-extensibility",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -15,27 +15,22 @@
   },
   "files": [
     "dist",
-    "generated/zern-augmentations.d.ts",
     "README.md"
   ],
   "scripts": {
     "build": "tsup",
-    "gen:types": "node ./scripts/gen-augmentations.mjs",
-    "example": "tsx examples/app.ts",
+    "example": "tsx examples/basic-usage.ts",
     "test": "vitest",
     "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
     "test:coverage:watch": "vitest --coverage --watch",
-    "coverage:endpoint": "node scripts/coverage-endpoint.mjs",
     "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "type-check": "tsc -p tsconfig.json --noEmit",
     "audit:ci": "pnpm audit --audit-level=high",
     "sbom": "syft dir:. -o cyclonedx-json=sbom.json",
-    "sbom:docker": "docker run --rm -v ${PWD}:/work -w /work anchore/syft:latest dir:. -o cyclonedx-json=sbom.json",
-    "bench:lifecycle": "node --loader ts-node/esm tools/benchmarks/lifecycle.ts",
-    "bench:throughput": "node --loader ts-node/esm tools/benchmarks/throughput.ts"
+    "sbom:docker": "docker run --rm -v ${PWD}:/work -w /work anchore/syft:latest dir:. -o cyclonedx-json=sbom.json"
   },
   "keywords": [
     "plugins",
@@ -49,23 +44,17 @@
   ],
   "author": "BiteCraft",
   "license": "MIT",
-  "dependencies": {
-    "remove": "^0.1.5",
-    "tslib": "^2.8.1"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@eslint/js": "^9.33.0",
     "@types/node": "^24.2.1",
     "@typescript-eslint/eslint-plugin": "^8.39.0",
     "@typescript-eslint/parser": "^8.39.0",
     "@vitest/coverage-v8": "3.2.4",
-    "@zern/tsls": "link:..\\zern-tsls",
-    "concurrently": "^8.2.2",
     "coverage-badges-cli": "^2.1.0",
     "eslint": "^9.33.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
-    "fast-check": "^4.2.0",
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
     "tsup": "^8.5.0",

@@ -1,83 +1,76 @@
 /**
- * @file Public types for the Core layer.
+ * @description Fundamental types for the Zern Kernel, like Branded types for type safety
  */
 
-import type { ConflictPolicy } from '@types';
+// Branded types for unique IDs
+export type PluginId = string & { readonly __brand: 'PluginId' };
+export type KernelId = string & { readonly __brand: 'KernelId' };
+export type Version = string & { readonly __brand: 'Version' };
 
-/** -------------------------
- * Domain types (stable codes)
- * ------------------------- */
-export type PluginState = 'unloaded' | 'loading' | 'loaded' | 'error' | 'destroyed';
-export type PluginName = string;
-
-/** -------------------------
- * Public API types
- * ------------------------- */
-export interface PluginInstance {
-  metadata: { name: string; version: string; description?: string };
-  [key: symbol]: unknown;
+// Kernel context available for plugins
+export interface KernelContext {
+  readonly id: KernelId;
+  readonly config: KernelConfig;
+  readonly get: <T>(pluginId: string) => T;
 }
 
-export interface PluginLoadOrder {
-  before?: string[];
-  after?: string[];
+// Kernel configuration options
+export interface KernelConfig {
+  readonly autoGlobal?: boolean;
+  readonly strictVersioning?: boolean;
+  readonly circularDependencies?: boolean;
+  readonly initializationTimeout?: number;
+  readonly extensionsEnabled?: boolean;
+  readonly logLevel?: 'debug' | 'info' | 'warn' | 'error';
 }
 
-export type UseOrder = { before?: string[]; after?: string[] };
-
-/** Names and maps */
-export type PluginMap = Record<PluginName, PluginInstance>;
-
-/** Registry interface to decouple implementation */
-export interface IPluginRegistry {
-  register(plugin: PluginInstance, order?: PluginLoadOrder): void;
-  get<T extends PluginInstance = PluginInstance>(name: string): T | null;
-  has(name: string): boolean;
-  list(): PluginInstance[];
-  getLoadOrder(name: string): PluginLoadOrder | undefined;
-  clear(): void;
+// Plugin states
+export enum PluginState {
+  UNLOADED = 'UNLOADED',
+  LOADING = 'LOADING',
+  LOADED = 'LOADED',
+  ERROR = 'ERROR',
 }
 
-/** Accessor type for typed plugin access on Kernel */
-export type PluginAccessor<TPlugins extends object> = {
-  readonly [K in keyof TPlugins]: TPlugins[K];
-} & {
-  register(plugin: PluginInstance, order?: PluginLoadOrder): void;
-  has(name: string): boolean;
-  list(): PluginInstance[];
-  getLoadOrder(name: string): PluginLoadOrder | undefined;
-  clear(): void;
-};
-
-/** -------------------------
- * Type utilities for compile-time augmentation merging
- * ------------------------- */
-export type AugmentMap = Partial<Record<string, unknown>>;
-
-export type ApplyAugmentsToPlugins<TPlugins extends object, TAug extends AugmentMap> = {
-  [K in keyof TPlugins]: K extends keyof TAug
-    ? TPlugins[K] & (TAug[K] extends object ? TAug[K] : unknown)
-    : TPlugins[K];
-};
-
-export type ExtractAugments<T> = T extends { augments?: infer A }
-  ? A extends Record<string, unknown>
-    ? A
-    : Record<never, unknown>
-  : Record<never, unknown>;
-
-/** -------------------------
- * Kernel options
- * ------------------------- */
-
-export interface KernelOptions {
-  augmentations?: {
-    policy?: ConflictPolicy;
-    namespacePrefix?: string;
-  };
+// Plugin Metadata
+export interface PluginMetadata {
+  readonly id: PluginId;
+  readonly name: string;
+  readonly version: Version;
+  readonly state: PluginState;
+  readonly dependencies: readonly PluginDependency[];
+  readonly extensions: readonly PluginExtension[];
 }
 
-/** -------------------------
- * Symbols
- * ------------------------- */
-export const PLUGIN_SETUP_SYMBOL = Symbol.for('zern.plugin.setup');
+// Plugin dependency
+export interface PluginDependency {
+  readonly pluginId: PluginId;
+  readonly versionRange: string;
+}
+
+// Plugin extension
+export interface PluginExtension {
+  readonly targetPluginId: PluginId;
+  readonly extensionFn: (api: unknown) => unknown;
+}
+
+// Created branded type helpers
+export function createPluginId(value: string): PluginId {
+  return value as PluginId;
+}
+
+export function createKernelId(value: string): KernelId {
+  return value as KernelId;
+}
+
+export function createVersion(value: string): Version {
+  if (!isValidVersion(value)) {
+    throw new Error(`Invalid version: ${value}`);
+  }
+  return value as Version;
+}
+
+function isValidVersion(version: string): boolean {
+  const semverRegex = /^\d+\.\d+\.\d+(-[\w.-]+)?(\+[\w.-]+)?$/;
+  return semverRegex.test(version);
+}
