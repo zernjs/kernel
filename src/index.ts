@@ -60,6 +60,10 @@ export { createPluginContainer } from '@/kernel';
 export type { LifecycleManager } from '@/kernel';
 export { createLifecycleManager } from '@/kernel';
 
+// Hooks exports
+export { usePlugin, bindGlobalKernel, createUsePlugin } from '@/hooks';
+export type { UsePluginTypes } from '@/hooks';
+
 // Extension exports
 export type { ExtensionManager } from '@/extension';
 export { createExtensionManager } from '@/extension';
