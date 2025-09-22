@@ -51,7 +51,9 @@ export function isPluginMetadata(value: unknown): value is PluginMetadata {
     'dependencies' in value &&
     Array.isArray((value as Record<string, unknown>).dependencies) &&
     'extensions' in value &&
-    Array.isArray((value as Record<string, unknown>).extensions)
+    Array.isArray((value as Record<string, unknown>).extensions) &&
+    'wrappers' in value &&
+    Array.isArray((value as Record<string, unknown>).wrappers)
   );
 }
 

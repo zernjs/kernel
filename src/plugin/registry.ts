@@ -68,6 +68,7 @@ export class PluginRegistryImpl implements PluginRegistry {
       state,
       dependencies: plugin.dependencies,
       extensions: plugin.extensions,
+      wrappers: plugin.wrappers,
     });
   }
 
@@ -92,6 +93,7 @@ export class PluginRegistryImpl implements PluginRegistry {
         state,
         dependencies: plugin.dependencies,
         extensions: plugin.extensions,
+        wrappers: plugin.wrappers,
       });
     }
 

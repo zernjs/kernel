@@ -38,10 +38,20 @@ class LifecycleManagerImpl implements LifecycleManager {
       const registry = container.getRegistry();
       const plugins = registry.getAll();
 
-      // Register all extensions before initializing plugins so targets receive them
+      // Register all extensions and wrappers before initializing plugins so targets receive them
       for (const pluginMeta of plugins) {
         for (const ext of pluginMeta.extensions) {
           extensions.registerExtension(ext);
+        }
+
+        // Register wrappers if the plugin has any
+        if (pluginMeta.wrappers && pluginMeta.wrappers.length > 0) {
+          for (const wrapper of pluginMeta.wrappers) {
+            extensions.registerEnhancedExtension({
+              targetPluginId: wrapper.targetPluginId,
+              wrappers: [wrapper],
+            });
+          }
         }
       }
 

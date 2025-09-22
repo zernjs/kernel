@@ -14,8 +14,10 @@ import {
   mathPlugin,
 } from './math-plugin/src';
 
-import { createKernel } from '../src';
+import { createKernel, getGlobalKernel } from '../src';
 await createKernel().use(mathPlugin).start();
+const kernel = getGlobalKernel();
+kernel.get('');
 
 console.log(add(1, 2));
 console.log(subtract(1, 2));

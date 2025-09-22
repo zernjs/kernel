@@ -2,6 +2,8 @@
  * @description Fundamental types for the Zern Kernel, like Branded types for type safety
  */
 
+import type { MethodWrapper } from '@/extension/wrapper-types';
+
 // Branded types for unique IDs
 export type PluginId = string & { readonly __brand: 'PluginId' };
 export type KernelId = string & { readonly __brand: 'KernelId' };
@@ -40,6 +42,7 @@ export interface PluginMetadata {
   readonly state: PluginState;
   readonly dependencies: readonly PluginDependency[];
   readonly extensions: readonly PluginExtension[];
+  readonly wrappers: readonly MethodWrapper[];
 }
 
 // Plugin dependency

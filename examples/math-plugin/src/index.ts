@@ -1,6 +1,3 @@
-// src/index.ts
-
-// Para uso direto (import { add } from 'meu-plugin')
 export {
   add,
   configure,
