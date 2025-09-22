@@ -62,6 +62,7 @@ export { createLifecycleManager } from '@/kernel';
 
 // Hooks exports
 export { usePlugin, bindGlobalKernel, createUsePlugin } from '@/hooks';
+export { createDirectMethod, getGlobalKernel, setGlobalKernel } from '@/hooks';
 export type { UsePluginTypes } from '@/hooks';
 
 // Extension exports
@@ -89,6 +90,16 @@ export {
   isPluginMetadata,
   isBuiltPlugin,
   isResult,
+} from '@/utils';
+
+// API Helper exports
+export {
+  bindMethods,
+  combineImplementations,
+  createAPI,
+  createAPIFactory,
+  extendAPI,
+  pickMethods,
 } from '@/utils';
 
 // Convenience exports

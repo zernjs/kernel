@@ -9,6 +9,7 @@ import type { BuiltPlugin } from '@/plugin';
 import { PluginContainer, createPluginContainer } from './container';
 import { LifecycleManager, createLifecycleManager } from './lifecycle';
 import { createExtensionManager } from '@/extension';
+import { setGlobalKernel } from '@/hooks';
 
 // Type utilities to compute final plugin APIs including extensions
 type PluginNameOf<P> =
@@ -64,7 +65,7 @@ class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown> = never>
 {
   private plugins: BuiltPlugin<string, unknown, unknown>[] = [];
   private config: KernelConfig = {
-    autoGlobal: false,
+    autoGlobal: true,
     strictVersioning: true,
     circularDependencies: false,
     initializationTimeout: 30000,
@@ -120,7 +121,11 @@ class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown>>
         throw initResult.error;
       }
 
-      return new KernelImpl<PluginsMap<U>>(kernelId, this.config, container, lifecycle);
+      const kernel = new KernelImpl<PluginsMap<U>>(kernelId, this.config, container, lifecycle);
+      if (this.config.autoGlobal) {
+        setGlobalKernel(kernel as Kernel<PluginsMap<U>>);
+      }
+      return kernel;
     } catch (error) {
       throw new KernelInitializationError(error as Error);
     }
