@@ -1,17 +1,18 @@
 import { Kernel } from '@/kernel';
+import { KernelInitializationError } from '@/core';
 
-// Em @zern/kernel/src/hooks/direct-methods.ts
-let globalKernel: Kernel<any> | undefined;
+// Global kernel instance
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let globalKernel: any = undefined;
 
-export function setGlobalKernel(kernel: Kernel<any>): void {
+export function setGlobalKernel<TPlugins>(kernel: Kernel<TPlugins>): void {
   globalKernel = kernel;
 }
 
-export function getGlobalKernel(): Kernel<any> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getGlobalKernel(): any {
   if (!globalKernel) {
-    throw new Error(
-      'Global kernel not initialized. Either call setGlobalKernel(kernel) manually or set autoGlobal: true in createKernel().withConfig({ autoGlobal: true }).'
-    );
+    throw new KernelInitializationError();
   }
   return globalKernel;
 }
@@ -19,8 +20,10 @@ export function getGlobalKernel(): Kernel<any> {
 export function createDirectMethod<TPluginName extends string, TMethodName extends string>(
   pluginName: TPluginName,
   methodName: TMethodName
-) {
-  return (...args: any[]) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): (...args: any[]) => any {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (...args: any[]): any => {
     const kernel = getGlobalKernel();
     const plugin = kernel.get(pluginName);
     const method = plugin[methodName];

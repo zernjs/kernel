@@ -11,7 +11,7 @@ import type {
   Result,
 } from '@/core';
 import type { BuiltPlugin } from '@/plugin';
-import { isObject } from '@/utils';
+import { isObject } from './validation';
 
 export function isPluginState(value: unknown): value is PluginState {
   return typeof value === 'string' && ['UNLOADED', 'LOADING', 'LOADED', 'ERROR'].includes(value);
@@ -82,12 +82,4 @@ export function isResult<T, E>(value: unknown): value is Result<T, E> {
     typeof (value as Record<string, unknown>).success === 'boolean' &&
     ((value as Record<string, unknown>).success === true ? 'data' in value : 'error' in value)
   );
-}
-
-export function isSuccess<T, E>(result: Result<T, E>): result is { success: true; data: T } {
-  return result.success;
-}
-
-export function isFailure<T, E>(result: Result<T, E>): result is { success: false; error: E } {
-  return !result.success;
 }

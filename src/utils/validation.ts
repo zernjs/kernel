@@ -16,8 +16,7 @@ export function isValidKernelId(id: string): boolean {
 export function validatePluginName(name: string): void {
   if (!isValidPluginName(name)) {
     throw new Error(
-      `Invalid plugin name: ${name}. Must be 2-50 characteres, start with letter,
-        contain only letters, numbers, hyphens, and underscores.`
+      `Invalid plugin name: ${name}. Must be 2-50 characters, start with letter, and contain only letters, numbers, hyphens, and underscores.`
     );
   }
 }

@@ -2,9 +2,9 @@
 
 # 🔥 Zern Kernel
 
-## Strongly-Typed Plugin Kerne
+### Strongly-Typed Plugin Kernel
 
-</div>
+> **Ultra-lightweight plugin orchestration with exceptional developer experience**
 
 > Ultra-lightweight plugin engine with natural DX and auto-extensibility
 
@@ -20,20 +20,61 @@
 
 </div>
 
-## Overview
+<div align="center">
 
-Zern Kernel is a next-generation plugin system designed for exceptional developer experience. It features a minimal core that allows plugins to be used naturally (like independent libraries), with automatic dependency resolution, transparent augmentations, and complete type safety.
+[**Features**](#-features) •
+[**Quick Start**](#-quick-start) •
+[**Documentation**](./docs/README.md) •
+[**Examples**](#-examples) •
+[**API Reference**](./docs/09-api-reference.md)
 
-## Key Features
+</div>
 
-- **🪶 Minimal Core**: Only essential functionality (register, init, shutdown)
-- **🔄 Natural DX**: Access plugin APIs through type-safe kernel.get()
-- **🤖 Auto Resolution**: Automatic dependency resolution and lifecycle management
-- **🔧 Transparent Extensions**: Plugins can extend others with seamless API merging
-- **📝 Zero Boilerplate**: Fluent API eliminates ceremonial code
-- **🛡️ Complete Type Safety**: Full TypeScript support with autocomplete
+---
 
-## Quick Start
+## 🌟 Overview
+
+**Zern Kernel** is a next-generation plugin system designed for **exceptional developer experience**. It provides a minimal, type-safe core that enables plugins to work naturally like independent libraries, with automatic dependency resolution, transparent API augmentation, and powerful method interception.
+
+### Why Zern Kernel?
+
+- 🎯 **Natural API Design** - Plugins feel like native libraries, not framework components
+- 🔒 **Complete Type Safety** - Full TypeScript support with autocomplete everywhere
+- 🚀 **Zero Boilerplate** - Fluent API eliminates ceremonial code
+- 🔄 **Intelligent Resolution** - Automatic dependency ordering with version validation
+- ⚡ **Runtime Flexibility** - Extend, intercept, and modify plugin behavior dynamically
+
+---
+
+## ✨ Features
+
+### Core Capabilities
+
+| Feature                           | Description                                                          |
+| --------------------------------- | -------------------------------------------------------------------- |
+| 🪶 **Minimal Core**               | Only essential functionality - register, initialize, shutdown        |
+| 🔄 **Fluent API**                 | Clean, chainable interface for plugin and kernel configuration       |
+| 🤖 **Auto Dependency Resolution** | Topological sorting with intelligent cycle detection                 |
+| 🔧 **API Extensions**             | Plugins can seamlessly extend other plugins' APIs                    |
+| 🎭 **Method Proxying**            | Intercept and modify behavior with before/after/around hooks         |
+| ⏱️ **Lifecycle Hooks**            | `onInit`, `onReady`, `onShutdown`, `onError` for resource management |
+| 🏷️ **Custom Metadata**            | Attach and access metadata with full type safety via `$meta`         |
+| 📦 **Direct Exports**             | Import plugin methods directly like a normal library                 |
+| 🛡️ **Result Pattern**             | Functional error handling without exceptions                         |
+| 🔍 **Version Control**            | Semantic versioning with flexible constraint matching                |
+
+### Advanced Features
+
+- ✅ **4 Proxy Modes**: Self-proxy, single plugin, dependencies, and global
+- ✅ **Kernel-Level Proxies**: Application-level interception via `createKernel().proxy()`
+- ✅ **Type-Safe Context**: Plugin dependencies and metadata are fully typed
+- ✅ **Priority-Based Execution**: Control proxy execution order with priorities
+- ✅ **Conditional Proxies**: Apply interceptors based on runtime conditions
+- ✅ **Method Selectors**: Fine-grained control with include/exclude patterns
+
+---
+
+## 🚀 Quick Start
 
 ### Installation
 
@@ -41,279 +82,444 @@ Zern Kernel is a next-generation plugin system designed for exceptional develope
 npm install @zern/kernel
 ```
 
-### Basic Usage
+### Basic Example
 
 ```typescript
 import { createKernel, plugin } from '@zern/kernel';
 
-// Create a database plugin
-const DatabasePlugin = plugin('database', '1.0.0').setup(() => ({
-  async connect(url: string) {
-    console.log(`Connected to: ${url}`);
-    return { connected: true };
-  },
-
-  users: {
-    async create(userData: any) {
-      const id = Math.random().toString(36);
-      console.log(`User created: ${id}`);
-      return { id, ...userData };
+// 1️⃣ Create a database plugin
+const databasePlugin = plugin('database', '1.0.0')
+  .metadata({
+    author: 'Zern Team',
+    category: 'data',
+  })
+  .setup(() => ({
+    async connect(url: string) {
+      console.log(`Connected to: ${url}`);
+      return { connected: true };
     },
-  },
-}));
+    users: {
+      async create(userData: { name: string; email: string }) {
+        const id = Math.random().toString(36).slice(2);
+        console.log(`User created: ${id}`);
+        return { id, ...userData };
+      },
+    },
+  }));
 
-// Create auth plugin with dependency
-const AuthPlugin = plugin('auth', '1.0.0')
-  .depends(DatabasePlugin)
+// 2️⃣ Create auth plugin with dependency
+const authPlugin = plugin('auth', '1.0.0')
+  .depends(databasePlugin, '^1.0.0')
+  .onInit(({ plugins }) => {
+    console.log('Auth initializing...');
+    console.log('Database author:', plugins.database.$meta.author);
+  })
   .setup(({ plugins }) => ({
     async validateToken(token: string) {
-      // Use database dependency
       console.log(`Validating token: ${token}`);
       return token === 'valid-token';
     },
   }));
 
-// Initialize kernel
-const kernel = await createKernel().use(DatabasePlugin).use(AuthPlugin).start();
+// 3️⃣ Initialize kernel and use plugins
+const kernel = await createKernel().use(databasePlugin).use(authPlugin).start();
 
-// Use plugins directly
-const dbApi = kernel.get('database');
-await dbApi.connect('postgresql://localhost:5432/mydb');
+// ✅ Type-safe plugin access
+const db = kernel.get('database');
+await db.connect('postgresql://localhost:5432/mydb');
 
-const user = await dbApi.users.create({
+const user = await db.users.create({
   name: 'John Doe',
   email: 'john@example.com',
 });
 
-const authApi = kernel.get('auth');
-const isValid = await authApi.validateToken('valid-token');
-```
+const auth = kernel.get('auth');
+const isValid = await auth.validateToken('valid-token');
 
-### Plugin Extensions
-
-Plugins can extend other plugins transparently:
-
-```typescript
-// Plugin that extends database with preferences
-const UserPreferencesPlugin = plugin('userPreferences', '1.0.0')
-  .depends(DatabasePlugin)
-  .extend(DatabasePlugin, database => ({
-    users: {
-      // Extends database.users with new method
-      async findWithPreferences(id: string) {
-        const user = await database.users.findById(id);
-        const prefs = await database.query('SELECT * FROM preferences WHERE user_id = ?', [id]);
-        return { ...user, preferences: prefs };
-      },
-    },
-  }))
-  .setup(() => ({}));
-
-// After kernel initialization, the extended method is available
-const db = kernel.get('database');
-const userWithPrefs = await db.users.findWithPreferences('123');
-```
-
-## API Reference
-
-### Core Functions
-
-#### `createKernel()`
-
-Creates a new kernel builder.
-
-```typescript
-const kernel = await createKernel().use(MyPlugin).withConfig({ logLevel: 'debug' }).start();
-```
-
-#### `plugin(name, version)`
-
-Creates a new plugin with fluent API.
-
-```typescript
-const MyPlugin = plugin('myPlugin', '1.0.0')
-  .depends(OtherPlugin)
-  .extend(TargetPlugin, api => ({ newMethod: () => {} }))
-  .setup(({ plugins }) => ({
-    myMethod: () => 'hello',
-  }));
-```
-
-### Kernel Builder Methods
-
-#### `use(plugin)`
-
-Registers a plugin with the kernel.
-
-```typescript
-const kernel = createKernel().use(DatabasePlugin).use(AuthPlugin);
-```
-
-#### `withConfig(config)`
-
-Sets kernel configuration options.
-
-```typescript
-const kernel = createKernel().withConfig({
-  logLevel: 'debug',
-  strictVersioning: true,
-  initializationTimeout: 30000,
-});
-```
-
-#### `build()`
-
-Builds the kernel without initializing it.
-
-```typescript
-const builtKernel = createKernel().use(MyPlugin).build();
-
-const kernel = await builtKernel.init();
-```
-
-#### `start()`
-
-Builds and initializes the kernel in one step.
-
-```typescript
-const kernel = await createKernel().use(MyPlugin).start();
-```
-
-### Kernel Methods
-
-#### `kernel.get<T>(name)`
-
-Gets a plugin API by name with full type safety.
-
-```typescript
-const api = kernel.get('myPlugin'); // Fully typed
-```
-
-#### `kernel.shutdown()`
-
-Shuts down all plugins and clears state.
-
-```typescript
+// Cleanup
 await kernel.shutdown();
 ```
 
-### Plugin Builder Methods
+---
 
-#### `depends(plugin, versionRange?)`
+## 🔧 Core Concepts
 
-Declares a dependency on another plugin.
+### 1. Plugin Creation
 
 ```typescript
-const MyPlugin = plugin('my', '1.0.0')
-  .depends(DatabasePlugin, '^1.0.0')
-  .setup(({ plugins }) => {
-    // plugins.database is available and typed
-  });
+const mathPlugin = plugin('math', '1.0.0')
+  .metadata({ author: 'Zern Team' })
+  .setup(() => ({
+    add: (a: number, b: number) => a + b,
+    multiply: (a: number, b: number) => a * b,
+  }));
 ```
 
-#### `extend(target, extensionFn)`
-
-Extends another plugin's API.
+### 2. Dependencies
 
 ```typescript
-const ExtenderPlugin = plugin('extender', '1.0.0')
-  .extend(TargetPlugin, api => ({
-    newMethod: () => api.existingMethod() + ' extended',
+const calculatorPlugin = plugin('calculator', '1.0.0')
+  .depends(mathPlugin, '^1.0.0') // Semantic versioning
+  .setup(({ plugins }) => ({
+    calculate: (expr: string) => {
+      // Access math plugin with full type safety
+      return plugins.math.add(1, 2);
+    },
+  }));
+```
+
+### 3. API Extensions
+
+Extend another plugin's API transparently:
+
+```typescript
+const advancedMathPlugin = plugin('advancedMath', '1.0.0')
+  .depends(mathPlugin, '^1.0.0')
+  .extend(mathPlugin, api => ({
+    // Add new methods to math plugin
+    power: (base: number, exp: number) => Math.pow(base, exp),
+    sqrt: (x: number) => Math.sqrt(x),
   }))
+  .setup(() => ({}));
+
+// After kernel initialization:
+const math = kernel.get('math');
+math.power(2, 3); // ✅ Extended method available!
+math.sqrt(16); // ✅ All extensions are merged
+```
+
+### 4. Method Proxying
+
+Intercept and modify plugin behavior:
+
+```typescript
+const loggingPlugin = plugin('logging', '1.0.0')
+  .depends(mathPlugin, '^1.0.0')
+  .proxy(mathPlugin, {
+    methods: 'add', // Intercept specific method
+    before: ctx => {
+      console.log(`[LOG] Calling ${ctx.method} with:`, ctx.args);
+    },
+    after: (result, ctx) => {
+      console.log(`[LOG] ${ctx.method} returned:`, result);
+      return result;
+    },
+  })
   .setup(() => ({}));
 ```
 
-#### `setup(setupFn)`
-
-Defines the plugin's implementation.
+**Proxy Modes:**
 
 ```typescript
-const MyPlugin = plugin('my', '1.0.0').setup(({ plugins, kernel }) => ({
-  doSomething: () => 'result',
-}));
+// 1. Self-proxy: Intercept own methods
+.proxy({ methods: 'add', before: ctx => console.log('self') })
+
+// 2. Single plugin proxy: Intercept specific plugin
+.depends(mathPlugin, '^1.0.0')
+.proxy(mathPlugin, { before: ctx => console.log('single') })
+
+// 3. Dependencies proxy: Intercept all dependencies
+.proxy('*', { before: ctx => console.log('all deps') })
+
+// 4. Global proxy: Intercept ALL plugins
+.proxy('**', { before: ctx => console.log('global') })
 ```
 
-## Advanced Features
+### 5. Kernel-Level Proxies
 
-### Intelligent Dependency Resolution
-
-The kernel features a sophisticated dependency resolution system with:
-
-#### Version Constraints
+Apply proxies at the application level:
 
 ```typescript
-const DatabasePlugin = plugin('database', '1.5.2').setup(() => ({ connect, query, users }));
-
-const AuthPlugin = plugin('auth', '3.1.0')
-  .depends(DatabasePlugin, '^1.0.0') // Accepts any 1.x.x version
-  .setup(({ plugins }) => ({ validateToken, createSession }));
-
-const CachePlugin = plugin('cache', '2.0.1')
-  .depends(DatabasePlugin, '>=1.5.0') // Needs 1.5.0 or higher
-  .setup(({ plugins }) => ({ get, set }));
-```
-
-#### Intelligent Error Detection
-
-The system detects and provides helpful suggestions for:
-
-- **Version conflicts**: Incompatible version constraints with upgrade suggestions
-- **Missing dependencies**: Clear identification with registration instructions
-- **Circular dependencies**: Complete cycle detection with resolution suggestions
-
-```typescript
-// Example error messages:
-// "Version conflict: Plugin 'auth' requires 'database' ^2.0.0, but found version 1.5.2.
-//  Suggestion: Upgrade DatabasePlugin to version 2.x.x or change auth dependency to '^1.0.0'"
-
-// "Circular dependency detected: auth → cache → database → auth.
-//  Suggestion: Remove one of the dependencies or restructure plugin relationships"
-```
-
-### Configuration Options
-
-```typescript
-interface KernelConfig {
-  autoGlobal: boolean; // Auto-register as global kernel
-  strictVersioning: boolean; // Enforce strict version matching
-  circularDependencies: boolean; // Allow circular dependencies
-  initializationTimeout: number; // Timeout in milliseconds
-  extensionsEnabled: boolean; // Enable plugin extensions
-  logLevel: 'debug' | 'info' | 'warn' | 'error';
-}
-```
-
-### TypeScript Support
-
-Full TypeScript support with autocomplete:
-
-```typescript
-// Plugins are fully typed
-const api = kernel.get('database'); // Typed as DatabaseAPI
-await api.connect(url); // Autocomplete available
-
-// Dependencies are typed in setup
-const MyPlugin = plugin('my', '1.0.0')
-  .depends(DatabasePlugin)
-  .setup(({ plugins }) => {
-    // plugins.database is fully typed with autocomplete
+const kernel = await createKernel()
+  .use(mathPlugin)
+  .use(apiPlugin)
+  // Global timing for all plugins
+  .proxy('**', ctx => {
+    let startTime: number;
     return {
-      /* ... */
+      before: () => {
+        startTime = Date.now();
+      },
+      after: result => {
+        console.log(`${ctx.plugin}.${ctx.method} took ${Date.now() - startTime}ms`);
+        return result;
+      },
     };
-  });
+  })
+  // Specific auth for API plugin
+  .proxy(apiPlugin, {
+    priority: 100,
+    include: ['create*', 'update*', 'delete*'],
+    before: ctx => checkPermissions(ctx.method),
+  })
+  .start();
 ```
 
-## Examples
+### 6. Lifecycle Hooks
 
-See the [examples](./examples) directory for complete usage examples:
+Manage plugin initialization, readiness, and cleanup:
 
-- [Basic Usage](./examples/basic-usage.ts) - Plugin creation, dependencies, and extensions
-- More examples coming soon...
+```typescript
+const databasePlugin = plugin('database', '1.0.0')
+  .metadata({ connectionString: 'postgresql://localhost:5432/db' })
+  .onInit(({ plugins }) => {
+    console.log('Initializing database...');
+  })
+  .onReady(({ plugins }) => {
+    console.log('Database ready!');
+  })
+  .onShutdown(({ plugins }) => {
+    console.log('Closing connections...');
+  })
+  .onError(({ error, plugins }) => {
+    console.error('Database error:', error);
+  })
+  .setup(() => ({
+    query: async (sql: string) => {
+      /* ... */
+    },
+  }));
+```
 
-## Contributing
+### 7. Direct Method Exports
 
-Contributions are welcome! Please read our contributing guidelines and submit pull requests.
+Use plugins like normal libraries:
 
-## License
+```typescript
+// In your plugin file:
+export const mathPlugin = plugin('math', '1.0.0').setup(() => ({
+  add: (a: number, b: number) => a + b,
+  multiply: (a: number, b: number) => a * b,
+}));
 
-MIT © BiteCraft
+// Export direct methods
+export const { add, multiply } = createDirectExports('math', {
+  add: (a: number, b: number): number => 0,
+  multiply: (a: number, b: number): number => 0,
+});
+
+// Usage in other files:
+import { add, multiply } from './math-plugin';
+console.log(add(2, 3)); // ✅ Full type safety!
+console.log(multiply(4, 5)); // ✅ Autocomplete works!
+```
+
+---
+
+## 📚 Documentation
+
+Comprehensive documentation is available in the [`docs/`](./docs/) directory:
+
+| Document                                                        | Description                          |
+| --------------------------------------------------------------- | ------------------------------------ |
+| [**Architecture Overview**](./docs/01-architecture-overview.md) | System design and layer architecture |
+| [**Getting Started**](./docs/02-getting-started.md)             | Installation and first steps         |
+| [**Plugin System**](./docs/03-plugin-system.md)                 | Creating and managing plugins        |
+| [**Kernel Layer**](./docs/04-kernel-layer.md)                   | Kernel initialization and lifecycle  |
+| [**Extension System**](./docs/05-extension-system.md)           | Extending plugin APIs                |
+| [**Direct Exports**](./docs/06-direct-exports.md)               | Library-like method exports          |
+| [**Lifecycle Hooks**](./docs/07-lifecycle-hooks.md)             | Plugin lifecycle management          |
+| [**Metadata System**](./docs/08-metadata-system.md)             | Custom metadata with type safety     |
+| [**API Reference**](./docs/09-api-reference.md)                 | Complete API documentation           |
+| [**Best Practices**](./docs/10-best-practices.md)               | Patterns and guidelines              |
+| [**Proxy System**](./docs/12-proxy-system.md)                   | Method interception and proxying     |
+
+---
+
+## 💡 Examples
+
+Explore complete examples in the [`examples/`](./examples/) directory:
+
+- [**Basic Usage**](./examples/basic-usage.ts) - Plugin creation, dependencies, and kernel initialization
+- [**Direct Usage**](./examples/direct-usage.ts) - Direct method exports and library-like usage
+- [**Proxy Demo**](./examples/proxy-demo.ts) - Method interception with multiple proxies
+- [**Proxy Complete Demo**](./examples/proxy-complete-demo.ts) - All 4 proxy modes in action
+- [**Kernel Proxy Demo**](./examples/kernel-proxy-demo.ts) - Kernel-level proxy examples
+- [**Simple Plugin**](./examples/simple-plugin/) - Minimalist plugin boilerplate
+- [**Math Plugin**](./examples/math-plugin/) - Opinionated, scalable plugin architecture
+
+---
+
+## 🎯 Use Cases
+
+### Cross-Cutting Concerns
+
+```typescript
+// Global logging
+const loggingPlugin = plugin('logging', '1.0.0')
+  .proxy('**', {
+    before: ctx => console.log(`[LOG] ${ctx.plugin}.${ctx.method}()`),
+  })
+  .setup(() => ({}));
+
+// Performance monitoring
+const timingPlugin = plugin('timing', '1.0.0')
+  .proxy('**', ctx => {
+    let start: number;
+    return {
+      before: () => {
+        start = Date.now();
+      },
+      after: result => {
+        console.log(`⏱️ ${ctx.method} took ${Date.now() - start}ms`);
+        return result;
+      },
+    };
+  })
+  .setup(() => ({}));
+```
+
+### Authentication & Authorization
+
+```typescript
+const authPlugin = plugin('auth', '1.0.0')
+  .depends(apiPlugin, '^1.0.0')
+  .proxy(apiPlugin, {
+    include: ['create*', 'update*', 'delete*'],
+    priority: 100, // Execute first
+    before: ctx => {
+      if (!isAuthenticated()) {
+        ctx.skip();
+        throw new Error('Unauthorized');
+      }
+    },
+  })
+  .setup(() => ({
+    /* ... */
+  }));
+```
+
+### Caching
+
+```typescript
+const cachePlugin = plugin('cache', '1.0.0')
+  .depends(apiPlugin, '^1.0.0')
+  .proxy(apiPlugin, {
+    include: ['get*', 'find*'],
+    priority: 90,
+    around: async (ctx, next) => {
+      const key = `${ctx.method}:${JSON.stringify(ctx.args)}`;
+      const cached = cache.get(key);
+      if (cached) return cached;
+
+      const result = await next();
+      cache.set(key, result);
+      return result;
+    },
+  })
+  .setup(() => ({}));
+```
+
+---
+
+## 🔍 Advanced Configuration
+
+### Kernel Configuration
+
+```typescript
+const kernel = await createKernel()
+  .use(myPlugin)
+  .withConfig({
+    autoGlobal: true, // Auto-register as global kernel
+    strictVersioning: true, // Enforce strict version matching
+    circularDependencies: false, // Disallow circular dependencies
+    initializationTimeout: 30000, // Timeout in milliseconds
+    extensionsEnabled: true, // Enable plugin extensions
+    logLevel: 'info', // Log level: debug | info | warn | error
+  })
+  .start();
+```
+
+### Version Constraints
+
+```typescript
+const authPlugin = plugin('auth', '1.0.0')
+  .depends(databasePlugin, '^1.0.0') // Compatible with 1.x.x
+  .depends(cachePlugin, '>=2.0.0') // Requires 2.0.0 or higher
+  .depends(utilsPlugin, '~1.2.3') // Compatible with 1.2.x
+  .setup(({ plugins }) => ({
+    /* ... */
+  }));
+```
+
+---
+
+## 🛠️ API Quick Reference
+
+### Creating Plugins
+
+```typescript
+plugin(name: string, version: string)
+  .metadata(data: Record<string, unknown>)
+  .depends(plugin: BuiltPlugin, versionRange?: string)
+  .extend(target: BuiltPlugin, fn: (api) => extensions)
+  .proxy(config: ProxyConfig)                  // Self-proxy
+  .proxy(target: BuiltPlugin, config: ProxyConfig)  // Single plugin
+  .proxy('*', config: ProxyConfig)             // All dependencies
+  .proxy('**', config: ProxyConfig)            // All plugins
+  .onInit(hook: (ctx) => void)
+  .onReady(hook: (ctx) => void)
+  .onShutdown(hook: (ctx) => void)
+  .onError(hook: (ctx) => void)
+  .setup(fn: (ctx) => api)
+```
+
+### Creating Kernel
+
+```typescript
+createKernel()
+  .use(plugin: BuiltPlugin)
+  .withConfig(config: Partial<KernelConfig>)
+  .proxy(target: BuiltPlugin, config: ProxyConfig)
+  .proxy('**', config: ProxyConfig)
+  .build()
+  .start()
+```
+
+### Using Kernel
+
+```typescript
+kernel.get(name: string)      // Get plugin API
+kernel.shutdown()             // Shutdown all plugins
+```
+
+---
+
+## 🧪 Testing
+
+```typescript
+import { createKernel, plugin } from '@zern/kernel';
+
+describe('MyPlugin', () => {
+  it('should work correctly', async () => {
+    const kernel = await createKernel().use(myPlugin).start();
+
+    const api = kernel.get('myPlugin');
+    expect(api.myMethod()).toBe('expected');
+
+    await kernel.shutdown();
+  });
+});
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please read our [contributing guidelines](./CONTRIBUTING.md) before submitting pull requests.
+
+---
+
+## 📄 License
+
+MIT © [ZernJS](https://github.com/zernjs)
+
+---
+
+<div align="center">
+
+**[⬆ Back to Top](#-zern-kernel)**
+
+Made with ❤️ by the Zern Team
+
+</div>

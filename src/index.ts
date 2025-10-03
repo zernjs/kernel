@@ -61,9 +61,8 @@ export type { LifecycleManager } from '@/kernel';
 export { createLifecycleManager } from '@/kernel';
 
 // Hooks exports
-export { usePlugin, bindGlobalKernel, createUsePlugin } from '@/hooks';
 export { createDirectMethod, getGlobalKernel, setGlobalKernel } from '@/hooks';
-export type { UsePluginTypes } from '@/hooks';
+export { createDirectExports } from '@/hooks';
 
 // Extension exports
 export type { ExtensionManager } from '@/extension';

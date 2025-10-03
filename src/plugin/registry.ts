@@ -8,11 +8,13 @@ import { success, failure, PluginNotFoundError, PluginLoadError, PluginState } f
 import type { BuiltPlugin } from './plugin';
 
 export interface PluginRegistry {
-  register<TName extends string, TApi, TExt = unknown>(
-    plugin: BuiltPlugin<TName, TApi, TExt>
+  register<TName extends string, TApi, TExt = unknown, TMetadata = unknown>(
+    plugin: BuiltPlugin<TName, TApi, TExt, TMetadata>
   ): Result<void, PluginLoadError>;
 
-  get<TApi>(pluginId: PluginId): Result<BuiltPlugin<string, TApi, unknown>, PluginNotFoundError>;
+  get<TApi>(
+    pluginId: PluginId
+  ): Result<BuiltPlugin<string, TApi, unknown, unknown>, PluginNotFoundError>;
 
   getMetadata(pluginId: PluginId): Result<PluginMetadata, PluginNotFoundError>;
 
@@ -24,18 +26,18 @@ export interface PluginRegistry {
 }
 
 export class PluginRegistryImpl implements PluginRegistry {
-  private plugins = new Map<PluginId, BuiltPlugin<string, unknown, unknown>>();
+  private plugins = new Map<PluginId, BuiltPlugin<string, unknown, unknown, unknown>>();
   private states = new Map<PluginId, PluginState>();
 
-  register<TName extends string, TApi, TExt = unknown>(
-    plugin: BuiltPlugin<TName, TApi, TExt>
+  register<TName extends string, TApi, TExt = unknown, TMetadata = unknown>(
+    plugin: BuiltPlugin<TName, TApi, TExt, TMetadata>
   ): Result<void, PluginLoadError> {
     try {
       if (this.plugins.has(plugin.id)) {
         return failure(new PluginLoadError(plugin.name, new Error('Plugin already registered')));
       }
 
-      this.plugins.set(plugin.id, plugin as BuiltPlugin<string, unknown, unknown>);
+      this.plugins.set(plugin.id, plugin as BuiltPlugin<string, unknown, unknown, unknown>);
       this.states.set(plugin.id, PluginState.UNLOADED);
 
       return success(undefined);
@@ -44,13 +46,15 @@ export class PluginRegistryImpl implements PluginRegistry {
     }
   }
 
-  get<TApi>(pluginId: PluginId): Result<BuiltPlugin<string, TApi, unknown>, PluginNotFoundError> {
+  get<TApi>(
+    pluginId: PluginId
+  ): Result<BuiltPlugin<string, TApi, unknown, unknown>, PluginNotFoundError> {
     const plugin = this.plugins.get(pluginId);
     if (!plugin) {
       return failure(new PluginNotFoundError(pluginId));
     }
 
-    return success(plugin as BuiltPlugin<string, TApi, unknown>);
+    return success(plugin as BuiltPlugin<string, TApi, unknown, unknown>);
   }
 
   getMetadata(pluginId: PluginId): Result<PluginMetadata, PluginNotFoundError> {
@@ -68,7 +72,7 @@ export class PluginRegistryImpl implements PluginRegistry {
       state,
       dependencies: plugin.dependencies,
       extensions: plugin.extensions,
-      wrappers: plugin.wrappers,
+      proxies: plugin.proxies,
     });
   }
 
@@ -93,7 +97,7 @@ export class PluginRegistryImpl implements PluginRegistry {
         state,
         dependencies: plugin.dependencies,
         extensions: plugin.extensions,
-        wrappers: plugin.wrappers,
+        proxies: plugin.proxies,
       });
     }
 

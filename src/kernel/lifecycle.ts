@@ -10,47 +10,131 @@ import {
   Result,
   createPluginId,
   createKernelId,
+  LifecycleHookContext,
+  PluginDependency,
 } from '@/core';
 import type { PluginContainer } from './container';
 import type { ExtensionManager } from '@/extension';
 import { success, failure, KernelInitializationError } from '@/core';
 import { createDependencyResolver } from '@/plugin';
+import type { ProxyMetadata } from '@/extension/proxy-types';
 
 export interface LifecycleManager {
   initialize(
     container: PluginContainer,
     extensions: ExtensionManager,
-    config: KernelConfig
+    config: KernelConfig,
+    kernelProxies?: readonly ProxyMetadata[]
   ): Promise<Result<void, KernelInitializationError>>;
 
-  shutdown(): Promise<void>;
+  shutdown(container?: PluginContainer, config?: KernelConfig): Promise<void>;
 }
 
 class LifecycleManagerImpl implements LifecycleManager {
   private initializationOrder: string[] = [];
 
+  /**
+   * Builds the plugins object with metadata for lifecycle hooks
+   */
+  private buildPluginsWithMetadata(
+    container: PluginContainer,
+    pluginDependencies: readonly PluginDependency[]
+  ): Record<string, unknown> {
+    const plugins: Record<string, unknown> = {};
+    const registry = container.getRegistry();
+
+    for (const dep of pluginDependencies) {
+      const depInstance = container.getInstance(dep.pluginId);
+      const depMetadata = registry.get(createPluginId(dep.pluginId));
+
+      if (depInstance.success && depMetadata.success) {
+        const apiData = depInstance.data as Record<string, unknown>;
+        const customMetadata =
+          typeof depMetadata.data.metadata === 'object' && depMetadata.data.metadata !== null
+            ? depMetadata.data.metadata
+            : {};
+
+        // Combine API with metadata
+        plugins[dep.pluginId] = {
+          ...apiData,
+          $meta: {
+            name: depMetadata.data.name,
+            version: depMetadata.data.version,
+            id: depMetadata.data.id,
+            ...customMetadata,
+          },
+        };
+      }
+    }
+
+    return plugins;
+  }
+
   async initialize(
     container: PluginContainer,
     extensions: ExtensionManager,
-    config: KernelConfig
+    config: KernelConfig,
+    kernelProxies: readonly ProxyMetadata[] = []
   ): Promise<Result<void, KernelInitializationError>> {
     try {
       const registry = container.getRegistry();
       const plugins = registry.getAll();
 
-      // Register all extensions and wrappers before initializing plugins so targets receive them
+      // Register kernel-level proxies first
+      if (kernelProxies.length > 0) {
+        for (const proxy of kernelProxies) {
+          // Expand kernel proxy targets
+          if (proxy.targetPluginId === '**') {
+            // Global proxy: register for ALL plugins
+            for (const targetPlugin of plugins) {
+              extensions.registerProxy({
+                targetPluginId: targetPlugin.id,
+                config: proxy.config,
+              });
+            }
+          } else {
+            // Single plugin proxy: register normally
+            extensions.registerProxy(proxy);
+          }
+        }
+      }
+
+      // Register all extensions and proxies before initializing plugins so targets receive them
       for (const pluginMeta of plugins) {
         for (const ext of pluginMeta.extensions) {
           extensions.registerExtension(ext);
         }
 
-        // Register wrappers if the plugin has any
-        if (pluginMeta.wrappers && pluginMeta.wrappers.length > 0) {
-          for (const wrapper of pluginMeta.wrappers) {
-            extensions.registerEnhancedExtension({
-              targetPluginId: wrapper.targetPluginId,
-              wrappers: [wrapper],
-            });
+        // Register proxies if the plugin has any
+        if (pluginMeta.proxies && pluginMeta.proxies.length > 0) {
+          for (const proxy of pluginMeta.proxies) {
+            // Expand proxy targets based on type
+            if (proxy.targetPluginId === 'self') {
+              // Self-proxy: register for the plugin itself
+              extensions.registerProxy({
+                targetPluginId: pluginMeta.id,
+                config: proxy.config,
+              });
+            } else if (proxy.targetPluginId === '*') {
+              // Dependencies proxy: register for all dependencies
+              for (const dep of pluginMeta.dependencies) {
+                extensions.registerProxy({
+                  targetPluginId: dep.pluginId,
+                  config: proxy.config,
+                });
+              }
+            } else if (proxy.targetPluginId === '**') {
+              // Global proxy: register for ALL plugins
+              for (const targetPlugin of plugins) {
+                extensions.registerProxy({
+                  targetPluginId: targetPlugin.id,
+                  config: proxy.config,
+                });
+              }
+            } else {
+              // Single plugin proxy: register normally
+              extensions.registerProxy(proxy);
+            }
           }
         }
       }
@@ -114,6 +198,21 @@ class LifecycleManagerImpl implements LifecycleManager {
         },
       };
 
+      // Build plugins with metadata for hooks
+      const pluginsWithMetadata = this.buildPluginsWithMetadata(container, plugin.dependencies);
+
+      const hookContext: LifecycleHookContext = {
+        pluginName,
+        pluginId: plugin.id,
+        kernel: kernelContext,
+        plugins: pluginsWithMetadata,
+      };
+
+      // Execute onInit hook (before setup)
+      if (plugin.hooks.onInit) {
+        await plugin.hooks.onInit(hookContext);
+      }
+
       const instance = plugin.setupFn({
         plugins: deps,
         kernel: kernelContext,
@@ -132,19 +231,89 @@ class LifecycleManagerImpl implements LifecycleManager {
       }
 
       registry.setState(createPluginId(pluginName), PluginState.LOADED);
+
+      // Execute onReady hook (after everything is initialized)
+      if (plugin.hooks.onReady) {
+        await plugin.hooks.onReady(hookContext);
+      }
     } catch (error) {
       registry.setState(createPluginId(pluginName), PluginState.ERROR);
+
+      // Execute onError hook if available
+      const pluginResult = registry.get(createPluginId(pluginName));
+      if (pluginResult.success && pluginResult.data.hooks.onError) {
+        const kernelContext: KernelContext = {
+          id: createKernelId('kernel'),
+          config,
+          get: <T>(name: string): T => {
+            const result = container.getInstance(name);
+            if (!result.success) throw result.error;
+            return result.data as T;
+          },
+        };
+
+        const pluginsWithMetadata = this.buildPluginsWithMetadata(
+          container,
+          pluginResult.data.dependencies
+        );
+
+        const hookContext: LifecycleHookContext = {
+          pluginName,
+          pluginId: pluginResult.data.id,
+          kernel: kernelContext,
+          plugins: pluginsWithMetadata,
+        };
+
+        try {
+          await pluginResult.data.hooks.onError(error as Error, hookContext);
+        } catch (hookError) {
+          // If error hook fails, log but continue throwing original error
+          console.error(`Error hook failed for plugin ${pluginName}:`, hookError);
+        }
+      }
+
       throw error;
     }
   }
 
-  async shutdown(): Promise<void> {
+  async shutdown(container?: PluginContainer, config?: KernelConfig): Promise<void> {
     const shutdownOrder = [...this.initializationOrder].reverse();
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    for (const _pluginName of shutdownOrder) {
-      // TODO: Implement plugin shutdown logic
-      // for now, just clear the references
+    for (const pluginName of shutdownOrder) {
+      if (container) {
+        const registry = container.getRegistry();
+        const pluginResult = registry.get(createPluginId(pluginName));
+
+        if (pluginResult.success && pluginResult.data.hooks.onShutdown) {
+          try {
+            const kernelContext: KernelContext = {
+              id: createKernelId('kernel'),
+              config: config || {},
+              get: <T>(name: string): T => {
+                const result = container.getInstance(name);
+                if (!result.success) throw result.error;
+                return result.data as T;
+              },
+            };
+
+            const pluginsWithMetadata = this.buildPluginsWithMetadata(
+              container,
+              pluginResult.data.dependencies
+            );
+
+            const hookContext: LifecycleHookContext = {
+              pluginName,
+              pluginId: pluginResult.data.id,
+              kernel: kernelContext,
+              plugins: pluginsWithMetadata,
+            };
+
+            await pluginResult.data.hooks.onShutdown(hookContext);
+          } catch (error) {
+            console.error(`Shutdown hook failed for plugin ${pluginName}:`, error);
+          }
+        }
+      }
     }
 
     this.initializationOrder = [];

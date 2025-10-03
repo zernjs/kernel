@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @file Kernel builder with fluent API
  * @description Manages plugins and extensions with type-safe
@@ -10,30 +11,8 @@ import { PluginContainer, createPluginContainer } from './container';
 import { LifecycleManager, createLifecycleManager } from './lifecycle';
 import { createExtensionManager } from '@/extension';
 import { setGlobalKernel } from '@/hooks';
-
-// Type utilities to compute final plugin APIs including extensions
-type PluginNameOf<P> =
-  P extends BuiltPlugin<infer N, unknown, unknown> ? (N extends string ? N : never) : never;
-type PluginExtMapOf<P> = P extends BuiltPlugin<string, unknown, infer M> ? M : never;
-type ExtFor<P, Target extends string> =
-  PluginExtMapOf<P> extends Record<string, unknown>
-    ? Target extends keyof PluginExtMapOf<P>
-      ? PluginExtMapOf<P>[Target]
-      : unknown
-    : unknown;
-type UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never) extends (
-  x: infer I
-) => void
-  ? I
-  : never;
-type ApiForName<U, Name extends string> =
-  Extract<U, BuiltPlugin<Name, unknown, unknown>> extends infer Match
-    ? Match extends BuiltPlugin<Name, infer A, unknown>
-      ? A
-      : never
-    : never;
-type ExtensionsForName<U, Name extends string> = UnionToIntersection<ExtFor<U, Name>>;
-type PluginsMap<U> = { [K in PluginNameOf<U>]: ApiForName<U, K> & ExtensionsForName<U, K> };
+import type { PluginsMap } from '@/utils/types';
+import type { ProxyConfig, ProxyMetadata } from '@/extension/proxy-types';
 
 // Initialized Kernel
 export interface Kernel<TPlugins = Record<string, unknown>> {
@@ -49,10 +28,20 @@ export interface BuiltKernel<TPlugins> {
 }
 
 // Builder Kernel
-export interface KernelBuilder<U extends BuiltPlugin<string, unknown, unknown> = never> {
-  use<P extends BuiltPlugin<string, unknown, unknown>>(plugin: P): KernelBuilder<U | P>;
+export interface KernelBuilder<U extends BuiltPlugin<string, unknown, unknown, unknown> = never> {
+  use<P extends BuiltPlugin<string, unknown, unknown, unknown>>(plugin: P): KernelBuilder<U | P>;
 
   withConfig(config: Partial<KernelConfig>): KernelBuilder<U>;
+
+  // Proxy methods - allows kernel-level proxying
+  // 1. Single plugin proxy: proxy specific plugin
+  proxy<TTargetName extends string, TTargetApi>(
+    target: BuiltPlugin<TTargetName, TTargetApi, unknown, unknown>,
+    config: ProxyConfig<TTargetApi>
+  ): KernelBuilder<U>;
+
+  // 2. Global proxy: proxy all plugins in kernel
+  proxy(target: '**', config: ProxyConfig<any>): KernelBuilder<U>;
 
   build(): BuiltKernel<PluginsMap<U>>;
 
@@ -60,10 +49,11 @@ export interface KernelBuilder<U extends BuiltPlugin<string, unknown, unknown> =
 }
 
 // Builder Implementation
-class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown> = never>
+class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown, unknown> = never>
   implements KernelBuilder<U>
 {
-  private plugins: BuiltPlugin<string, unknown, unknown>[] = [];
+  private plugins: BuiltPlugin<string, unknown, unknown, unknown>[] = [];
+  private kernelProxies: ProxyMetadata[] = [];
   private config: KernelConfig = {
     autoGlobal: true,
     strictVersioning: true,
@@ -73,8 +63,8 @@ class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown> = never>
     logLevel: 'info',
   };
 
-  use<P extends BuiltPlugin<string, unknown, unknown>>(plugin: P): KernelBuilder<U | P> {
-    this.plugins.push(plugin as BuiltPlugin<string, unknown, unknown>);
+  use<P extends BuiltPlugin<string, unknown, unknown, unknown>>(plugin: P): KernelBuilder<U | P> {
+    this.plugins.push(plugin as BuiltPlugin<string, unknown, unknown, unknown>);
     return this as unknown as KernelBuilder<U | P>;
   }
 
@@ -83,8 +73,33 @@ class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown> = never>
     return this as unknown as KernelBuilder<U>;
   }
 
+  // Proxy method - supports single plugin or global proxy
+  proxy(targetOrSymbol: any, config?: any): KernelBuilder<U> {
+    if (config === undefined) {
+      // Should not happen - proxy() requires 2 arguments
+      throw new Error('Kernel proxy requires a target and config');
+    }
+
+    if (targetOrSymbol === '**') {
+      // Global proxy: proxy all plugins
+      this.kernelProxies.push({
+        targetPluginId: '**',
+        config: config as any,
+      });
+    } else {
+      // Single plugin proxy
+      const target = targetOrSymbol as BuiltPlugin<string, unknown, unknown, unknown>;
+      this.kernelProxies.push({
+        targetPluginId: target.id,
+        config: config as any,
+      });
+    }
+
+    return this as unknown as KernelBuilder<U>;
+  }
+
   build(): BuiltKernel<PluginsMap<U>> {
-    return new BuiltKernelImpl<U>(this.plugins, this.config);
+    return new BuiltKernelImpl<U>(this.plugins, this.kernelProxies, this.config);
   }
 
   async start(): Promise<Kernel<PluginsMap<U>>> {
@@ -93,11 +108,12 @@ class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown> = never>
 }
 
 // Built Kernel Implementation
-class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown>>
+class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown>>
   implements BuiltKernel<PluginsMap<U>>
 {
   constructor(
-    private readonly plugins: readonly BuiltPlugin<string, unknown, unknown>[],
+    private readonly plugins: readonly BuiltPlugin<string, unknown, unknown, unknown>[],
+    private readonly kernelProxies: readonly ProxyMetadata[],
     private readonly config: KernelConfig
   ) {}
   async init(): Promise<Kernel<PluginsMap<U>>> {
@@ -115,16 +131,23 @@ class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown>>
         }
       }
 
-      const initResult = await lifecycle.initialize(container, extensions, this.config);
+      const initResult = await lifecycle.initialize(
+        container,
+        extensions,
+        this.config,
+        this.kernelProxies
+      );
 
       if (!initResult.success) {
         throw initResult.error;
       }
 
       const kernel = new KernelImpl<PluginsMap<U>>(kernelId, this.config, container, lifecycle);
+
       if (this.config.autoGlobal) {
         setGlobalKernel(kernel as Kernel<PluginsMap<U>>);
       }
+
       return kernel;
     } catch (error) {
       throw new KernelInitializationError(error as Error);
@@ -150,7 +173,7 @@ class KernelImpl<TPlugins> implements Kernel<TPlugins> {
   }
 
   async shutdown(): Promise<void> {
-    await this.lifecycle.shutdown();
+    await this.lifecycle.shutdown(this.container, this.config);
   }
 }
 

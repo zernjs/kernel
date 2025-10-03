@@ -2,30 +2,26 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @file Extension system for modified plugin APIs
- * @description Allows plugins to extend other plugins' APIs and wrap existing methods
+ * @description Allows plugins to extend other plugins' APIs and intercept methods via proxies
  */
 
 import type { PluginId, PluginExtension } from '@/core';
 import { createPluginId } from '@/core';
-import type {
-  EnhancedPluginExtension,
-  MethodWrapper,
-  WrapperContext,
-  WrapperResult,
-} from './wrapper-types';
+import type { ProxyMetadata, CompiledMethodProxy, ProxyContext } from './proxy-types';
+import { shouldProxyMethod, enhanceContext } from './proxy-types';
 
 export interface ExtensionManager {
   registerExtension(extension: PluginExtension): void;
-  registerEnhancedExtension(extension: EnhancedPluginExtension): void;
+  registerProxy(proxy: ProxyMetadata): void;
   applyExtensions<TApi extends object>(pluginName: string, baseApi: TApi): TApi;
   getExtensions(pluginName: string): readonly PluginExtension[];
-  getWrappers(pluginName: string): readonly MethodWrapper[];
+  getProxies(pluginName: string): readonly ProxyMetadata[];
   clear(): void;
 }
 
 class ExtensionManagerImpl implements ExtensionManager {
   private extensions = new Map<PluginId, PluginExtension[]>();
-  private wrappers = new Map<PluginId, MethodWrapper[]>();
+  private proxies = new Map<PluginId, ProxyMetadata[]>();
 
   registerExtension(extension: PluginExtension): void {
     const targetName = extension.targetPluginId;
@@ -33,28 +29,19 @@ class ExtensionManagerImpl implements ExtensionManager {
     this.extensions.set(targetName, [...existing, extension]);
   }
 
-  registerEnhancedExtension(extension: EnhancedPluginExtension): void {
-    // Register traditional extension if present
-    if (extension.extensionFn) {
-      this.registerExtension({
-        targetPluginId: extension.targetPluginId,
-        extensionFn: extension.extensionFn,
-      });
-    }
-
-    // Register wrappers if present
-    if (extension.wrappers && extension.wrappers.length > 0) {
-      const targetName = extension.targetPluginId;
-      const existing = this.wrappers.get(targetName) ?? [];
-      this.wrappers.set(targetName, [...existing, ...extension.wrappers]);
-    }
+  // Register proxy
+  registerProxy(proxy: ProxyMetadata): void {
+    // After expansion in lifecycle, targetPluginId is always a concrete PluginId
+    const targetName = proxy.targetPluginId as PluginId;
+    const existing = this.proxies.get(targetName) ?? [];
+    this.proxies.set(targetName, [...existing, proxy]);
   }
 
   applyExtensions<TApi extends object>(pluginName: string, baseApi: TApi): TApi {
     const extensions = this.extensions.get(createPluginId(pluginName)) ?? [];
-    const wrappers = this.wrappers.get(createPluginId(pluginName)) ?? [];
+    const proxies = this.proxies.get(createPluginId(pluginName)) ?? [];
 
-    if (extensions.length === 0 && wrappers.length === 0) {
+    if (extensions.length === 0 && proxies.length === 0) {
       return baseApi;
     }
 
@@ -77,253 +64,219 @@ class ExtensionManagerImpl implements ExtensionManager {
       }
     }
 
-    // Apply wrappers
-    extendedApi = this.applyWrappers(pluginName, extendedApi, wrappers);
+    // Apply proxies
+    if (proxies.length > 0) {
+      extendedApi = this.applyProxies(pluginName, extendedApi, proxies);
+    }
 
     return extendedApi;
   }
 
-  private applyWrappers<TApi extends object>(
+  // Apply proxies to a plugin API
+  private applyProxies<TApi extends object>(
     pluginName: string,
     api: TApi,
-    wrappers: readonly MethodWrapper[]
+    proxies: readonly ProxyMetadata[]
   ): TApi {
-    const wrappedApi = { ...api } as Record<string, unknown>;
+    const proxiedApi = { ...api } as Record<string, unknown>;
 
-    // Process all-methods wrappers and convert them to individual method wrappers
-    const expandedWrappers = this.expandAllMethodsWrappers(api, wrappers);
+    // Compile proxies into method-specific proxies
+    const compiledProxies = this.compileProxies(api, proxies);
 
-    // Group wrappers by method name
-    const wrappersByMethod = new Map<string, MethodWrapper[]>();
-    for (const wrapper of expandedWrappers) {
-      const existing = wrappersByMethod.get(wrapper.methodName) ?? [];
-      wrappersByMethod.set(wrapper.methodName, [...existing, wrapper]);
+    // Group by method and sort by priority
+    const proxiesByMethod = new Map<string, CompiledMethodProxy[]>();
+    for (const proxy of compiledProxies) {
+      const existing = proxiesByMethod.get(proxy.methodName) ?? [];
+      proxiesByMethod.set(proxy.methodName, [...existing, proxy]);
     }
 
-    // Apply wrappers to each method
-    for (const [methodName, methodWrappers] of wrappersByMethod) {
-      const originalMethod = wrappedApi[methodName];
+    // Sort each group by priority (higher first)
+    for (const [methodName, methodProxies] of proxiesByMethod) {
+      methodProxies.sort((a, b) => b.priority - a.priority);
+    }
+
+    // Apply proxies to each method
+    for (const [methodName, methodProxies] of proxiesByMethod) {
+      const originalMethod = proxiedApi[methodName];
 
       if (typeof originalMethod === 'function') {
-        wrappedApi[methodName] = this.createWrappedMethod(
+        proxiedApi[methodName] = this.createProxiedMethod(
           pluginName,
           methodName,
           originalMethod as (...args: unknown[]) => unknown,
-          methodWrappers
+          methodProxies
         );
       }
     }
 
-    return wrappedApi as TApi;
+    return proxiedApi as TApi;
   }
 
-  private expandAllMethodsWrappers<TApi extends object>(
+  // Compile proxy metadata into method-specific compiled proxies
+  private compileProxies<TApi extends object>(
     api: TApi,
-    wrappers: readonly MethodWrapper[]
-  ): MethodWrapper[] {
-    const expandedWrappers: MethodWrapper[] = [];
+    proxies: readonly ProxyMetadata[]
+  ): CompiledMethodProxy[] {
+    const compiled: CompiledMethodProxy[] = [];
 
-    for (const wrapper of wrappers) {
-      // Check if this is an all-methods wrapper
-      if ((wrapper as any).isAllMethods) {
-        const allMethodsWrapper = wrapper as any;
-        const config = allMethodsWrapper.config;
+    for (const proxyMeta of proxies) {
+      // Resolve config (can be function or object)
+      const config =
+        typeof proxyMeta.config === 'function'
+          ? proxyMeta.config({} as any) // Factory function - will be called per-method with real context
+          : proxyMeta.config;
 
-        // Get all method names from the API
-        const allMethodNames = Object.keys(api).filter(
-          key => typeof (api as any)[key] === 'function'
-        );
+      // Get all method names from the API
+      const allMethodNames = Object.keys(api).filter(
+        key => typeof (api as any)[key] === 'function'
+      );
 
-        // Apply filters if specified
-        let targetMethods = allMethodNames;
-        if (config.filter) {
-          if (config.filter.include) {
-            targetMethods = targetMethods.filter(method => config.filter.include!.includes(method));
-          }
-          if (config.filter.exclude) {
-            targetMethods = targetMethods.filter(
-              method => !config.filter.exclude!.includes(method)
-            );
-          }
-        }
+      // Determine which methods should be proxied
+      const targetMethods = allMethodNames.filter(methodName =>
+        shouldProxyMethod(methodName, {
+          methods: config.methods as any,
+          include: config.include,
+          exclude: config.exclude,
+        })
+      );
 
-        // Create individual method wrappers for each target method
-        for (const methodName of targetMethods) {
-          expandedWrappers.push({
-            targetPluginId: allMethodsWrapper.targetPluginId,
-            methodName,
-            before: config.wrapper.before,
-            after: config.wrapper.after,
-            around: config.wrapper.around,
-          });
-        }
-      } else {
-        // Regular method wrapper, add as-is
-        expandedWrappers.push(wrapper);
+      // Create compiled proxy for each target method
+      for (const methodName of targetMethods) {
+        compiled.push({
+          targetPluginId: proxyMeta.targetPluginId as PluginId, // After expansion, always PluginId
+          methodName,
+          before: config.before,
+          after: config.after,
+          onError: config.onError,
+          around: config.around,
+          priority: config.priority ?? 50,
+          condition: config.condition,
+          group: config.group,
+          // Store original config for later resolution
+          configFactory: typeof proxyMeta.config === 'function' ? proxyMeta.config : undefined,
+        });
       }
     }
 
-    return expandedWrappers;
+    return compiled;
   }
 
-  private createWrappedMethod(
+  // Create proxied method with all interceptors
+  private createProxiedMethod(
     pluginName: string,
     methodName: string,
     originalMethod: (...args: unknown[]) => unknown,
-    wrappers: readonly MethodWrapper[]
+    proxies: readonly CompiledMethodProxy[]
   ): (...args: unknown[]) => unknown {
-    // Check if any wrapper is async or if the original method returns a Promise
-    const hasAsyncWrappers = wrappers.some(
-      wrapper =>
-        this.isAsyncWrapper(wrapper.before) ||
-        this.isAsyncWrapper(wrapper.after) ||
-        this.isAsyncWrapper(wrapper.around)
-    );
-
-    const isOriginalAsync = this.isAsyncMethod(originalMethod);
-
-    // If no async wrappers and original method is sync, keep it synchronous
-    if (!hasAsyncWrappers && !isOriginalAsync) {
-      return (...args: unknown[]) => {
-        let context: WrapperContext = {
-          pluginName,
-          methodName,
-          originalMethod,
-          args: [...args], // Create mutable copy
-        };
-
-        try {
-          // Execute before wrappers (synchronously)
-          for (const wrapper of wrappers) {
-            if (wrapper.before) {
-              const result = wrapper.before(context) as WrapperResult;
-              if (!result.shouldCallOriginal) {
-                return result.overrideResult;
-              }
-              // Update args if modified
-              if (result.modifiedArgs) {
-                context = {
-                  ...context,
-                  args: [...result.modifiedArgs], // Create mutable copy
-                };
-              }
-            }
-          }
-
-          // Execute around wrappers (only the first one found)
-          const aroundWrapper = wrappers.find(w => w.around);
-          let result: unknown;
-
-          if (aroundWrapper) {
-            const wrapperResult = aroundWrapper.around!(context) as WrapperResult;
-            if (!wrapperResult.shouldCallOriginal) {
-              result = wrapperResult.overrideResult;
-            } else {
-              result = originalMethod(...context.args);
-            }
-          } else {
-            result = originalMethod(...context.args);
-          }
-
-          // Execute after wrappers (synchronously)
-          for (const wrapper of wrappers) {
-            if (wrapper.after) {
-              // Preserve all context properties including dynamic ones like startTime, but exclude args
-              const { args, ...afterContext } = context;
-              result = wrapper.after(result, afterContext) as unknown;
-            }
-          }
-
-          return result;
-        } catch (error) {
-          console.warn(`Error in wrapped method ${pluginName}.${methodName}:`, error);
-          throw error;
-        }
-      };
-    }
-
-    // Async version for when we have async wrappers or async original method
+    // Always use async version for proxies (simpler and more flexible)
     return async (...args: unknown[]) => {
-      let context: WrapperContext = {
-        pluginName,
-        methodName,
-        originalMethod,
-        args: [...args], // Create mutable copy
+      // Create proxy context (partial - will be enhanced with methods)
+      const baseContext = {
+        plugin: pluginName,
+        method: methodName,
+        args,
+        data: {} as any,
       };
+
+      // Enhance context with helper methods
+      const enhancedContext = enhanceContext(baseContext as any);
+
+      // Resolve config factories (if any) with the shared context
+      const resolvedProxies = proxies.map(proxy => {
+        if (proxy.configFactory) {
+          const resolved = proxy.configFactory(enhancedContext);
+          return {
+            ...proxy,
+            before: resolved.before,
+            after: resolved.after,
+            onError: resolved.onError,
+            around: resolved.around,
+          };
+        }
+        return proxy;
+      });
 
       try {
-        // Execute before wrappers
-        for (const wrapper of wrappers) {
-          if (wrapper.before) {
-            const result = await wrapper.before(context);
-            if (!result.shouldCallOriginal) {
-              return result.overrideResult;
-            }
-            // Update args if modified
-            if (result.modifiedArgs) {
-              context = {
-                ...context,
-                args: [...result.modifiedArgs], // Create mutable copy
-              };
+        // Execute BEFORE interceptors
+        for (const proxy of resolvedProxies) {
+          // Check condition
+          if (proxy.condition && !proxy.condition(enhancedContext)) {
+            continue;
+          }
+
+          if (proxy.before) {
+            await proxy.before(enhancedContext);
+
+            // Check if execution was skipped
+            if (enhancedContext._skipExecution) {
+              return enhancedContext._overrideResult;
             }
           }
         }
 
-        // Execute around wrappers (only the first one found)
-        const aroundWrapper = wrappers.find(w => w.around);
+        // Update args if modified
+        const finalArgs = enhancedContext._modifiedArgs ?? enhancedContext.args;
+
+        // Execute AROUND interceptors (only first one)
+        const aroundProxy = resolvedProxies.find(
+          p => p.around && (!p.condition || p.condition(enhancedContext))
+        );
+
         let result: unknown;
 
-        if (aroundWrapper) {
-          const wrapperResult = await aroundWrapper.around!(context);
-          if (!wrapperResult.shouldCallOriginal) {
-            result = wrapperResult.overrideResult;
-          } else {
-            result = await originalMethod(...context.args);
-          }
+        if (aroundProxy) {
+          // Execute around interceptor
+          result = await aroundProxy.around!(enhancedContext, async () => {
+            return await originalMethod(...finalArgs);
+          });
         } else {
-          result = await originalMethod(...context.args);
+          // Execute original method
+          result = await originalMethod(...finalArgs);
         }
 
-        // Execute after wrappers
-        for (const wrapper of wrappers) {
-          if (wrapper.after) {
-            // Preserve all context properties including dynamic ones like startTime, but exclude args
-            const { args, ...afterContext } = context;
-            result = await wrapper.after(result, afterContext);
+        // Execute AFTER interceptors
+        for (const proxy of resolvedProxies) {
+          // Check condition
+          if (proxy.condition && !proxy.condition(enhancedContext)) {
+            continue;
+          }
+
+          if (proxy.after) {
+            result = await proxy.after(result, enhancedContext);
           }
         }
 
         return result;
       } catch (error) {
-        console.warn(`Error in wrapped method ${pluginName}.${methodName}:`, error);
+        // Execute ERROR interceptors
+        for (const proxy of resolvedProxies) {
+          // Check condition
+          if (proxy.condition && !proxy.condition(enhancedContext)) {
+            continue;
+          }
+
+          if (proxy.onError) {
+            return await proxy.onError(error as Error, enhancedContext);
+          }
+        }
+
+        // If no error handler, re-throw
         throw error;
       }
     };
-  }
-
-  private isAsyncWrapper(wrapper: unknown): boolean {
-    if (!wrapper || typeof wrapper !== 'function') return false;
-
-    // Check if the function is async by looking at its constructor
-    return wrapper.constructor.name === 'AsyncFunction';
-  }
-
-  private isAsyncMethod(method: (...args: unknown[]) => unknown): boolean {
-    // Check if the function is async by looking at its constructor
-    return method.constructor.name === 'AsyncFunction';
   }
 
   getExtensions(pluginName: string): readonly PluginExtension[] {
     return this.extensions.get(createPluginId(pluginName)) ?? [];
   }
 
-  getWrappers(pluginName: string): readonly MethodWrapper[] {
-    return this.wrappers.get(createPluginId(pluginName)) ?? [];
+  getProxies(pluginName: string): readonly ProxyMetadata[] {
+    return this.proxies.get(createPluginId(pluginName)) ?? [];
   }
 
   clear(): void {
     this.extensions.clear();
-    this.wrappers.clear();
+    this.proxies.clear();
   }
 }
 

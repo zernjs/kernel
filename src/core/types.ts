@@ -2,8 +2,6 @@
  * @description Fundamental types for the Zern Kernel, like Branded types for type safety
  */
 
-import type { MethodWrapper } from '@/extension/wrapper-types';
-
 // Branded types for unique IDs
 export type PluginId = string & { readonly __brand: 'PluginId' };
 export type KernelId = string & { readonly __brand: 'KernelId' };
@@ -42,7 +40,8 @@ export interface PluginMetadata {
   readonly state: PluginState;
   readonly dependencies: readonly PluginDependency[];
   readonly extensions: readonly PluginExtension[];
-  readonly wrappers: readonly MethodWrapper[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readonly proxies: readonly any[]; // ProxyMetadata[] - using any to avoid circular dependency
 }
 
 // Plugin dependency
@@ -55,6 +54,26 @@ export interface PluginDependency {
 export interface PluginExtension {
   readonly targetPluginId: PluginId;
   readonly extensionFn: (api: unknown) => unknown;
+}
+
+// Lifecycle hook context
+export interface LifecycleHookContext<TDepsWithMeta = Record<string, unknown>> {
+  readonly pluginName: string;
+  readonly pluginId: PluginId;
+  readonly kernel: KernelContext;
+  readonly plugins: TDepsWithMeta;
+}
+
+// Lifecycle hooks
+export type LifecycleHook<TDeps = Record<string, unknown>> = (
+  context: LifecycleHookContext<TDeps>
+) => void | Promise<void>;
+
+export interface PluginLifecycleHooks<TDeps = Record<string, unknown>> {
+  readonly onInit?: LifecycleHook<TDeps>;
+  readonly onReady?: LifecycleHook<TDeps>;
+  readonly onShutdown?: LifecycleHook<TDeps>;
+  readonly onError?: (error: Error, context: LifecycleHookContext<TDeps>) => void | Promise<void>;
 }
 
 // Created branded type helpers
