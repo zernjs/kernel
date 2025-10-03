@@ -6,7 +6,7 @@
 
 > **Ultra-lightweight plugin orchestration with exceptional developer experience**
 
-> Ultra-lightweight plugin engine with natural DX and auto-extensibility
+</div>
 
 <div align="center">
 
@@ -22,11 +22,7 @@
 
 <div align="center">
 
-[**Features**](#-features) •
-[**Quick Start**](#-quick-start) •
-[**Documentation**](./docs/README.md) •
-[**Examples**](#-examples) •
-[**API Reference**](./docs/09-api-reference.md)
+[**Features**](#-features) • [**Quick Start**](#-quick-start) • [**Documentation**](./docs/README.md) • [**Examples**](#-examples) • [**API Reference**](./docs/09-api-reference.md)
 
 </div>
 

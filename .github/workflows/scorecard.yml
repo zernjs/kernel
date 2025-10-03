@@ -3,9 +3,9 @@ on:
   push:
     branches: [main]
     paths:
-      - '**/*.ts'
-      - '**/*.js'
+      - 'src/**'
       - 'package.json'
+      - 'pnpm-lock.yaml'
   schedule: [{ cron: '0 6 * * 1' }]
 permissions:
   contents: read
