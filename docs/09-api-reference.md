@@ -414,24 +414,21 @@ function getGlobalKernel(): any;
 
 ### Proxy Configuration
 
-#### `ProxyConfig<TPlugin>`
+#### `ProxyConfig<TStore>`
 
-Configuration for method proxying.
+Configuration for method proxying. Store is accessible via `ctx.store` in all interceptors.
 
 ```typescript
-type ProxyConfig<TPlugin = any> = ProxyConfigObject<TPlugin> | ProxyConfigFactory<TPlugin>;
-
-interface ProxyConfigObject<TPlugin = any> {
+interface ProxyConfig<TStore = any> {
   // Method selection
-  methods?: string | string[];
   include?: MethodPattern[];
   exclude?: MethodPattern[];
 
-  // Interceptors
-  before?: ProxyBefore<any>;
-  after?: ProxyAfter<any>;
-  onError?: ProxyError<any>;
-  around?: ProxyAround<any>;
+  // Interceptors (all have access to ctx.store)
+  before?: ProxyBefore<any, TStore>;
+  after?: ProxyAfter<any, TStore>;
+  onError?: ProxyError<any, TStore>;
+  around?: ProxyAround<any, TStore>;
 
   // Advanced options
   priority?: number;

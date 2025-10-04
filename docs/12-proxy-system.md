@@ -330,7 +330,7 @@ Complete control **around** the original method. You manually call the original 
 - Retry logic
 - Performance measurement
 - Conditional execution
-- Wrapping with try/catch
+- Error handling with try/catch
 
 ### Error Interceptor
 

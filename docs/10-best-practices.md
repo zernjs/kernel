@@ -653,7 +653,7 @@ const fileLoggerPlugin = plugin('logger-file', '1.0.0')
 - Use semantic versioning
 - Type your APIs
 - Keep setup functions pure
-- Use wrappers for cross-cutting concerns
+- Use proxies for cross-cutting concerns
 - Handle errors properly
 - Document your plugins
 

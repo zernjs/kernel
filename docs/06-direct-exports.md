@@ -99,7 +99,7 @@ function createDirectExports<
 
 **Returns:**
 
-- Object with the same keys, but values are runtime wrappers
+- Object with the same keys, but values are runtime proxies
 
 **Example:**
 
@@ -256,8 +256,8 @@ TypeScript sees:
 
 ```typescript
 // When you call add(2, 3):
-1. createDirectExports created a wrapper function
-2. Wrapper calls getGlobalKernel()
+1. createDirectExports created a proxy function
+2. Proxy calls getGlobalKernel()
 3. Gets the 'math' plugin from kernel
 4. Calls the actual add method on the plugin
 5. Returns the result
@@ -268,7 +268,7 @@ TypeScript sees:
 ```
 add(2, 3)
    ↓
-Wrapper Function
+Proxy Function
    ↓
 getGlobalKernel()
    ↓

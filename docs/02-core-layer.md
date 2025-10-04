@@ -408,7 +408,7 @@ export interface PluginMetadata {
   readonly state: PluginState;
   readonly dependencies: readonly PluginDependency[];
   readonly extensions: readonly PluginExtension[];
-  readonly wrappers: readonly MethodWrapper[];
+  readonly proxies: readonly ProxyMetadata[];
 }
 ```
 

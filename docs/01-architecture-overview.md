@@ -34,17 +34,17 @@ The **kernel** is the orchestrator that:
 Zern Kernel follows a **layered architecture** where each layer has specific responsibilities:
 
 ```
-Application Layer
-      ↓
-Direct Exports Layer
-      ↓
-Extension Layer
-      ↓
-Kernel Layer
-      ↓
-Plugin Layer
-      ↓
-Core Layer
+  Application Layer
+        ↓
+  Direct Exports Layer
+        ↓
+  Extension Layer
+        ↓
+  Kernel Layer
+        ↓
+  Plugin Layer
+        ↓
+  Core Layer
 ```
 
 ### Layer Responsibilities
@@ -102,7 +102,7 @@ For each plugin (in dependency order):
 2. Resolve dependencies (get already-initialized deps)
 3. Execute setup function with context
 4. Apply extensions (add new methods)
-5. Apply wrappers (intercept existing methods)
+5. Apply proxies (intercept existing methods)
 6. Store final API instance
 7. Change state to LOADED
 ```
@@ -117,7 +117,7 @@ math.add(2, 3); // Method call
 **What happens:**
 
 1. Kernel retrieves plugin instance from container
-2. Method is called (possibly going through wrappers)
+2. Method is called (possibly going through proxies)
 3. Result is returned
 
 ---
@@ -219,13 +219,12 @@ createKernel().use(plugin1).use(plugin2).start();
 
 ### 4. Extension Layer (`src/extension/`)
 
-**Purpose:** Dynamic API modification (extensions + wrappers)
+**Purpose:** Dynamic API modification (extensions + proxies)
 
 **Key Files:**
 
 - `extension.ts` - Extension manager
-- `wrapper-types.ts` - Wrapper type definitions
-- `wrapper-helpers.ts` - Common wrapper patterns
+- `proxy-types.ts` - Proxy type definitions
 
 **Design Pattern:** Decorator pattern + Proxy pattern
 
@@ -234,7 +233,7 @@ plugin('logger', '1.0.0')
   .extend(mathPlugin, () => ({
     /* new methods */
   }))
-  .wrap(mathPlugin, 'add', { before, after, around });
+  .proxy(mathPlugin, { before, after, around });
 ```
 
 ### 5. Direct Exports Layer (`src/hooks/`)
@@ -281,7 +280,7 @@ User Code
 PluginContainer
     ↓ (returns instance)
 ExtensionManager (if extended)
-    ↓ (applies wrappers if any)
+    ↓ (applies proxies if any)
 Actual Method
     ↓ (returns result)
 User Code
@@ -290,15 +289,15 @@ User Code
 ### Extension Application Flow
 
 ```
-Base API
-    ↓
-ExtensionManager
-    ↓ (merge extensions)
-Extended API
-    ↓ (apply wrappers)
-Wrapped API
-    ↓ (store in container)
-Final API
+  Base API
+      ↓
+  ExtensionManager
+      ↓ (merge extensions)
+  Extended API
+      ↓ (apply proxies)
+  Proxied API
+      ↓ (store in container)
+  Final API
 ```
 
 ---
@@ -313,7 +312,7 @@ Used for **fluent API construction**:
 plugin('math', '1.0.0')
   .depends(logger)
   .extend(calculator, () => ({}))
-  .wrap(calculator, 'add', {})
+  .proxy(calculator, {})
   .setup(() => ({}));
 ```
 
@@ -359,10 +358,10 @@ Used for **plugin dependencies**:
 Used for **method interception**:
 
 ```typescript
-const wrappedMethod = (...args) => {
-  // Before wrapper
+const proxiedMethod = (...args) => {
+  // Before interceptor
   const result = originalMethod(...args);
-  // After wrapper
+  // After interceptor
   return result;
 };
 ```
@@ -371,7 +370,7 @@ const wrappedMethod = (...args) => {
 
 - Non-invasive behavior modification
 - Cross-cutting concerns (logging, caching)
-- Composable wrappers
+- Composable proxies
 
 ---
 

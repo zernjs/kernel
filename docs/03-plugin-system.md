@@ -2,7 +2,7 @@
 
 > **Creating, building, and managing plugins**
 
-The Plugin System is the heart of Zern Kernel. It provides a fluent API for defining plugins with dependencies, extensions, and wrappers.
+The Plugin System is the heart of Zern Kernel. It provides a fluent API for defining plugins with dependencies, extensions, proxies, and shared state.
 
 ---
 
@@ -65,19 +65,20 @@ const calculatorPlugin = plugin('calculator', '1.0.0')
 ### `.setup(fn)` - Define Plugin API
 
 ```typescript
-interface PluginBuilder<TName, TApi, TDeps, TExtMap> {
+interface PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore> {
   setup<TNewApi>(
-    fn: (ctx: PluginSetupContext<TDeps>) => TNewApi
-  ): BuiltPlugin<TName, TNewApi, TExtMap>;
+    fn: (ctx: PluginSetupContext<TDeps, TStore>) => TNewApi
+  ): BuiltPlugin<TName, TNewApi, TExtMap, TMetadata, TStore>;
 }
 ```
 
 **Setup Context:**
 
 ```typescript
-interface PluginSetupContext<TDeps> {
+interface PluginSetupContext<TDeps, TStore> {
   readonly plugins: TDeps; // Injected dependencies
   readonly kernel: KernelContext; // Kernel access
+  readonly store: TStore; // store access
 }
 ```
 
@@ -97,11 +98,18 @@ plugin('logger', '1.0.0').setup(({ kernel }) => {
 ### `.depends(plugin, version)` - Add Dependency
 
 ```typescript
-interface PluginBuilder<TName, TApi, TDeps, TExtMap> {
-  depends<TDepName extends string, TDepApi>(
-    plugin: BuiltPlugin<TDepName, TDepApi>,
+interface PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore> {
+  depends<TDepName extends string, TDepApi, TDepExtMap, TDepMetadata, TDepStore>(
+    plugin: BuiltPlugin<TDepName, TDepApi, TDepExtMap, TDepMetadata, TDepStore>,
     versionRange?: string
-  ): PluginBuilder<TName, TApi, TDeps & Record<TDepName, TDepApi>, TExtMap>;
+  ): PluginBuilder<
+    TName,
+    TApi,
+    TDeps & Record<TDepName, TDepApi & { __meta__?: TDepMetadata }>,
+    TExtMap,
+    TMetadata,
+    TStore
+  >;
 }
 ```
 
@@ -129,14 +137,101 @@ plugin('advanced', '1.0.0')
   });
 ```
 
+### `.store(factory)` - Shared Plugin State
+
+```typescript
+interface PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore> {
+  store<TNewStore>(
+    factory: () => TNewStore
+  ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TNewStore>;
+}
+```
+
+The `.store()` method creates a **shared, mutable state** that is accessible across:
+
+- All lifecycle hooks (`onInit`, `onReady`, `onShutdown`, `onError`)
+- The `setup` function
+- All proxy interceptors (`before`, `after`, `around`, `onError`)
+
+**Key Benefits:**
+
+- ✅ **Type-safe** - Automatic type inference, no generics needed
+- ✅ **Persistent** - State survives across all plugin lifecycle stages
+- ✅ **Mutable** - Can be modified in any hook or interceptor
+- ✅ **Scoped** - Each plugin has its own isolated store
+
+**Example:**
+
+```typescript
+const databasePlugin = plugin('database', '1.0.0')
+  // Define store with automatic type inference
+  .store(() => ({
+    connection: null as DatabaseConnection | null,
+    queryCount: 0,
+    errors: [] as Error[],
+  }))
+  // Access store in onInit (before setup)
+  .onInit(async ({ store }) => {
+    store.connection = await createConnection();
+  })
+  // Access store in proxy interceptors
+  .proxy({
+    include: ['query'],
+    before: ctx => {
+      ctx.store.queryCount++; // ✅ Type-safe access
+    },
+    onError: (error, ctx) => {
+      ctx.store.errors.push(error); // ✅ Track errors
+    },
+  })
+  // Access store in setup
+  .setup(({ store }) => ({
+    query: async (sql: string) => {
+      if (!store.connection) {
+        throw new Error('Not connected');
+      }
+      return await store.connection.execute(sql);
+    },
+    getStats: () => ({
+      queries: store.queryCount,
+      errors: store.errors.length,
+    }),
+  }))
+  // Access store + API in onReady
+  .onReady(({ store, api }) => {
+    console.log(`Database ready. Queries: ${store.queryCount}`);
+    console.log('Stats:', api.getStats()); // ✅ API is available
+  })
+  // Access store + API in onShutdown
+  .onShutdown(async ({ store, api }) => {
+    console.log('Final stats:', api.getStats());
+    await store.connection?.close();
+  });
+```
+
+**Important Notes:**
+
+- The factory function is called once during plugin build
+- Store is initialized before `onInit` hook
+- Store is mutable - changes persist across all hooks and interceptors
+- Each plugin instance has its own isolated store
+- For type safety, define the store type inline in the factory return
+
 ### `.extend(target, fn)` - Extend Another Plugin
 
 ```typescript
-interface PluginBuilder<TName, TApi, TDeps, TExtMap> {
-  extend<TTargetName extends string, TTargetApi, TExt extends object>(
-    target: BuiltPlugin<TTargetName, TTargetApi>,
+interface PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore> {
+  extend<
+    TTargetName extends string,
+    TTargetApi,
+    TTargetExtMap,
+    TTargetMetadata,
+    TTargetStore,
+    TExt extends object,
+  >(
+    target: BuiltPlugin<TTargetName, TTargetApi, TTargetExtMap, TTargetMetadata, TTargetStore>,
     fn: (api: TTargetApi) => TExt
-  ): PluginBuilder<TName, TApi, TDeps, TExtMap & Record<TTargetName, TExt>>;
+  ): PluginBuilder<TName, TApi, TDeps, TExtMap & Record<TTargetName, TExt>, TMetadata, TStore>;
 }
 ```
 
@@ -213,10 +308,10 @@ For complete documentation, see [Proxy System](./12-proxy-system.md).
 Add custom metadata to your plugin that can be accessed in lifecycle hooks and dependency contexts.
 
 ```typescript
-interface PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata> {
+interface PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore> {
   metadata<TNewMetadata extends Record<string, unknown>>(
     metadata: TNewMetadata
-  ): PluginBuilder<TName, TApi, TDeps, TExtMap, TNewMetadata>;
+  ): PluginBuilder<TName, TApi, TDeps, TExtMap, TNewMetadata, TStore>;
 }
 ```
 
@@ -282,11 +377,13 @@ The **PluginRegistry** manages plugin storage and metadata.
 
 ```typescript
 interface PluginRegistry {
-  register<TName, TApi, TExt>(
-    plugin: BuiltPlugin<TName, TApi, TExt>
+  register<TName extends string, TApi, TExt, TMetadata, TStore>(
+    plugin: BuiltPlugin<TName, TApi, TExt, TMetadata, TStore>
   ): Result<void, PluginLoadError>;
 
-  get<TApi>(pluginId: PluginId): Result<BuiltPlugin<string, TApi>, PluginNotFoundError>;
+  get<TApi>(
+    pluginId: PluginId
+  ): Result<BuiltPlugin<string, TApi, unknown, unknown, unknown>, PluginNotFoundError>;
 
   getMetadata(pluginId: PluginId): Result<PluginMetadata, PluginNotFoundError>;
 

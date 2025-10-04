@@ -254,17 +254,22 @@ type PartialConfig = DeepPartial<KernelConfig>;
 
 ---
 
-## 🔧 Wrapper Type System
+## 🔧 Proxy Type System
 
-### Auto-Typed Wrapper Context
+### Auto-Typed Proxy Context
 
 ```typescript
-interface AutoTypedWrapperContext<TMethod extends (...args: any[]) => any, TExtensions = {}> {
-  readonly pluginName: string;
-  readonly methodName: string;
-  readonly originalMethod: TMethod;
+interface ProxyContext<TMethod extends (...args: any[]) => any, TStore = any> {
+  readonly plugin: string;
+  readonly method: string;
   readonly args: Parameters<TMethod>;
-  [key: string]: any; // Allow dynamic properties
+  readonly store: TStore; // Shared plugin store
+  _skipExecution?: boolean;
+  _overrideResult?: Awaited<ReturnType<TMethod>>;
+  _modifiedArgs?: Parameters<TMethod>;
+  skip: () => void;
+  replace: (result: Awaited<ReturnType<TMethod>>) => void;
+  modifyArgs: (...args: Parameters<TMethod>) => void;
 }
 ```
 
@@ -272,24 +277,31 @@ interface AutoTypedWrapperContext<TMethod extends (...args: any[]) => any, TExte
 
 - `args` is automatically typed as `Parameters<TMethod>`
 - Return type is inferred as `ReturnType<TMethod>`
-- Custom properties can be added dynamically
+- `store` provides type-safe shared state
+- Helper methods (`skip`, `replace`, `modifyArgs`) are type-safe
 
-### Auto-Typed Wrapper Config
+### Auto-Typed Proxy Config
 
 ```typescript
-interface AutoTypedWrapperConfig<TMethod extends (...args: any[]) => any, TExtensions = {}> {
-  readonly before?: (
-    context: AutoTypedWrapperContext<TMethod, TExtensions>
-  ) => AutoTypedWrapperResult<TMethod> | Promise<AutoTypedWrapperResult<TMethod>>;
-
-  readonly after?: (
+interface ProxyConfig<TStore = any> {
+  include?: MethodSelector;
+  exclude?: MethodSelector;
+  priority?: number;
+  before?: <TMethod extends (...args: any[]) => any>(
+    ctx: ProxyContext<TMethod, TStore>
+  ) => void | Promise<void>;
+  after?: <TMethod extends (...args: any[]) => any>(
     result: Awaited<ReturnType<TMethod>>,
-    context: Omit<AutoTypedWrapperContext<TMethod, TExtensions>, 'args'>
+    ctx: ProxyContext<TMethod, TStore>
   ) => Awaited<ReturnType<TMethod>> | Promise<Awaited<ReturnType<TMethod>>>;
-
-  readonly around?: (
-    context: AutoTypedWrapperContext<TMethod, TExtensions>
-  ) => AutoTypedWrapperResult<TMethod> | Promise<AutoTypedWrapperResult<TMethod>>;
+  around?: <TMethod extends (...args: any[]) => any>(
+    ctx: ProxyContext<TMethod, TStore>,
+    next: () => Promise<Awaited<ReturnType<TMethod>>>
+  ) => Awaited<ReturnType<TMethod>> | Promise<Awaited<ReturnType<TMethod>>>;
+  onError?: <TMethod extends (...args: any[]) => any>(
+    error: Error,
+    ctx: ProxyContext<TMethod, TStore>
+  ) => void | Promise<void>;
 }
 ```
 
@@ -414,11 +426,11 @@ const math = kernel.get('math') as MathAPI;
 ✅ **Good:**
 
 ```typescript
-.wrap(mathPlugin, 'add', {
-  before: (context) => {
-    // context.args is automatically [number, number]
-    const [a, b] = context.args;
-    return { shouldCallOriginal: true };
+.proxy(mathPlugin, {
+  include: ['add'],
+  before: (ctx) => {
+    // ctx.args is automatically [number, number]
+    const [a, b] = ctx.args;
   },
 });
 ```

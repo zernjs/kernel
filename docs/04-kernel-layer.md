@@ -99,7 +99,7 @@ interface KernelBuilder<U> {
 | `strictVersioning`      | `boolean`                                | `true`   | Enforce strict version matching        |
 | `circularDependencies`  | `boolean`                                | `false`  | Allow circular deps (not recommended)  |
 | `initializationTimeout` | `number`                                 | `30000`  | Max initialization time in ms          |
-| `extensionsEnabled`     | `boolean`                                | `true`   | Enable API extensions and wrappers     |
+| `extensionsEnabled`     | `boolean`                                | `true`   | Enable API extensions and proxies      |
 | `logLevel`              | `'debug' \| 'info' \| 'warn' \| 'error'` | `'info'` | Logging verbosity                      |
 
 **Example:**
@@ -151,7 +151,7 @@ interface KernelBuilder<U> {
 1. Validates all plugins are registered
 2. Resolves dependencies
 3. Calculates initialization order
-4. Registers extensions and wrappers
+4. Registers extensions and proxies
 5. Initializes each plugin in order
 6. Returns initialized kernel
 
@@ -284,14 +284,14 @@ interface LifecycleManager {
 
 ```typescript
 1. Get all registered plugins from registry
-2. Register all extensions and wrappers first
+2. Register all extensions and proxies first
 3. Resolve dependency order
 4. For each plugin (in order):
    a. Change state to LOADING
    b. Resolve dependencies
    c. Execute setup function
    d. Apply extensions (add new methods)
-   e. Apply wrappers (intercept methods)
+   e. Apply proxies (intercept methods)
    f. Store final API instance
    g. Change state to LOADED
 5. Return success or first error
@@ -414,37 +414,36 @@ const extendedApi = extensions.applyExtensions('math', mathApi);
 container.setInstance('math', extendedApi);
 ```
 
-### Wrapper Application
+### Proxy Application
 
-When plugins have wrappers:
+When plugins have proxies:
 
 ```typescript
 const loggingPlugin = plugin('logging', '1.0.0')
-  .wrap(mathPlugin, 'add', {
-    before: (context) => {
-      console.log('Before add:', context.args);
-      return { shouldCallOriginal: true };
+  .proxy(mathPlugin, {
+    include: ['add'],
+    before: (ctx) => {
+      console.log('Before add:', ctx.args);
     },
   })
   .setup(() => ({}));
 
 // During initialization:
-// 1. Register wrapper BEFORE initializing math
-extensions.registerWrapper({
+// 1. Register proxy BEFORE initializing math
+extensions.registerProxy({
   targetPluginId: 'math',
-  methodName: 'add',
-  before: /* ... */,
+  config: /* ... */,
 });
 
 // 2. Initialize math normally
 const mathApi = mathPlugin.setupFn(/* ... */);
 
-// 3. Apply wrappers
-const wrappedApi = extensions.applyWrappers('math', mathApi);
-// wrappedApi.add is now wrapped!
+// 3. Apply proxies
+const proxiedApi = extensions.applyExtensions('math', mathApi);
+// proxiedApi.add is now proxied!
 
-// 4. Store wrapped API
-container.setInstance('math', wrappedApi);
+// 4. Store proxied API
+container.setInstance('math', proxiedApi);
 ```
 
 ---
@@ -595,7 +594,7 @@ type FinalMap = {
 Now that you understand the Kernel Layer, proceed to:
 
 **[Extension System →](./05-extension-system.md)**  
-Learn how to extend plugin APIs and wrap methods for advanced functionality.
+Learn how to extend plugin APIs for advanced functionality.
 
 ---
 
