@@ -9,8 +9,8 @@ import { success, failure, PluginNotFoundError, PluginLoadError } from '@/core';
 import { createPluginRegistry } from '@/plugin';
 
 export interface PluginContainer {
-  register<TName extends string, TApi, TExt = unknown, TMetadata = unknown>(
-    plugin: BuiltPlugin<TName, TApi, TExt, TMetadata>
+  register<TName extends string, TApi, TExt = unknown, TMetadata = unknown, TStore = unknown>(
+    plugin: BuiltPlugin<TName, TApi, TExt, TMetadata, TStore>
   ): Result<void, PluginLoadError>;
 
   getInstance<TApi>(pluginName: string): Result<TApi, PluginNotFoundError>;
@@ -30,8 +30,8 @@ class PluginContainerImpl implements PluginContainer {
     this.registry = createPluginRegistry();
   }
 
-  register<TName extends string, TApi, TExt = unknown, TMetadata = unknown>(
-    plugin: BuiltPlugin<TName, TApi, TExt, TMetadata>
+  register<TName extends string, TApi, TExt = unknown, TMetadata = unknown, TStore = unknown>(
+    plugin: BuiltPlugin<TName, TApi, TExt, TMetadata, TStore>
   ): Result<void, PluginLoadError> {
     return this.registry.register(plugin);
   }

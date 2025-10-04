@@ -13,7 +13,7 @@ import { shouldProxyMethod, enhanceContext } from './proxy-types';
 export interface ExtensionManager {
   registerExtension(extension: PluginExtension): void;
   registerProxy(proxy: ProxyMetadata): void;
-  applyExtensions<TApi extends object>(pluginName: string, baseApi: TApi): TApi;
+  applyExtensions<TApi extends object>(pluginName: string, baseApi: TApi, store?: unknown): TApi;
   getExtensions(pluginName: string): readonly PluginExtension[];
   getProxies(pluginName: string): readonly ProxyMetadata[];
   clear(): void;
@@ -37,7 +37,11 @@ class ExtensionManagerImpl implements ExtensionManager {
     this.proxies.set(targetName, [...existing, proxy]);
   }
 
-  applyExtensions<TApi extends object>(pluginName: string, baseApi: TApi): TApi {
+  applyExtensions<TApi extends object>(
+    pluginName: string,
+    baseApi: TApi,
+    store: unknown = {}
+  ): TApi {
     const extensions = this.extensions.get(createPluginId(pluginName)) ?? [];
     const proxies = this.proxies.get(createPluginId(pluginName)) ?? [];
 
@@ -66,7 +70,7 @@ class ExtensionManagerImpl implements ExtensionManager {
 
     // Apply proxies
     if (proxies.length > 0) {
-      extendedApi = this.applyProxies(pluginName, extendedApi, proxies);
+      extendedApi = this.applyProxies(pluginName, extendedApi, proxies, store);
     }
 
     return extendedApi;
@@ -76,7 +80,8 @@ class ExtensionManagerImpl implements ExtensionManager {
   private applyProxies<TApi extends object>(
     pluginName: string,
     api: TApi,
-    proxies: readonly ProxyMetadata[]
+    proxies: readonly ProxyMetadata[],
+    store: unknown
   ): TApi {
     const proxiedApi = { ...api } as Record<string, unknown>;
 
@@ -104,7 +109,8 @@ class ExtensionManagerImpl implements ExtensionManager {
           pluginName,
           methodName,
           originalMethod as (...args: unknown[]) => unknown,
-          methodProxies
+          methodProxies,
+          store
         );
       }
     }
@@ -120,11 +126,7 @@ class ExtensionManagerImpl implements ExtensionManager {
     const compiled: CompiledMethodProxy[] = [];
 
     for (const proxyMeta of proxies) {
-      // Resolve config (can be function or object)
-      const config =
-        typeof proxyMeta.config === 'function'
-          ? proxyMeta.config({} as any) // Factory function - will be called per-method with real context
-          : proxyMeta.config;
+      const config = proxyMeta.config;
 
       // Get all method names from the API
       const allMethodNames = Object.keys(api).filter(
@@ -134,7 +136,6 @@ class ExtensionManagerImpl implements ExtensionManager {
       // Determine which methods should be proxied
       const targetMethods = allMethodNames.filter(methodName =>
         shouldProxyMethod(methodName, {
-          methods: config.methods as any,
           include: config.include,
           exclude: config.exclude,
         })
@@ -152,8 +153,6 @@ class ExtensionManagerImpl implements ExtensionManager {
           priority: config.priority ?? 50,
           condition: config.condition,
           group: config.group,
-          // Store original config for later resolution
-          configFactory: typeof proxyMeta.config === 'function' ? proxyMeta.config : undefined,
         });
       }
     }
@@ -166,39 +165,25 @@ class ExtensionManagerImpl implements ExtensionManager {
     pluginName: string,
     methodName: string,
     originalMethod: (...args: unknown[]) => unknown,
-    proxies: readonly CompiledMethodProxy[]
+    proxies: readonly CompiledMethodProxy[],
+    store: unknown
   ): (...args: unknown[]) => unknown {
     // Always use async version for proxies (simpler and more flexible)
     return async (...args: unknown[]) => {
-      // Create proxy context (partial - will be enhanced with methods)
+      // Create proxy context with store
       const baseContext = {
         plugin: pluginName,
         method: methodName,
         args,
-        data: {} as any,
+        store,
       };
 
       // Enhance context with helper methods
       const enhancedContext = enhanceContext(baseContext as any);
 
-      // Resolve config factories (if any) with the shared context
-      const resolvedProxies = proxies.map(proxy => {
-        if (proxy.configFactory) {
-          const resolved = proxy.configFactory(enhancedContext);
-          return {
-            ...proxy,
-            before: resolved.before,
-            after: resolved.after,
-            onError: resolved.onError,
-            around: resolved.around,
-          };
-        }
-        return proxy;
-      });
-
       try {
         // Execute BEFORE interceptors
-        for (const proxy of resolvedProxies) {
+        for (const proxy of proxies) {
           // Check condition
           if (proxy.condition && !proxy.condition(enhancedContext)) {
             continue;
@@ -218,7 +203,7 @@ class ExtensionManagerImpl implements ExtensionManager {
         const finalArgs = enhancedContext._modifiedArgs ?? enhancedContext.args;
 
         // Execute AROUND interceptors (only first one)
-        const aroundProxy = resolvedProxies.find(
+        const aroundProxy = proxies.find(
           p => p.around && (!p.condition || p.condition(enhancedContext))
         );
 
@@ -235,7 +220,7 @@ class ExtensionManagerImpl implements ExtensionManager {
         }
 
         // Execute AFTER interceptors
-        for (const proxy of resolvedProxies) {
+        for (const proxy of proxies) {
           // Check condition
           if (proxy.condition && !proxy.condition(enhancedContext)) {
             continue;
@@ -249,7 +234,7 @@ class ExtensionManagerImpl implements ExtensionManager {
         return result;
       } catch (error) {
         // Execute ERROR interceptors
-        for (const proxy of resolvedProxies) {
+        for (const proxy of proxies) {
           // Check condition
           if (proxy.condition && !proxy.condition(enhancedContext)) {
             continue;

@@ -57,23 +57,38 @@ export interface PluginExtension {
 }
 
 // Lifecycle hook context
-export interface LifecycleHookContext<TDepsWithMeta = Record<string, unknown>> {
+export interface LifecycleHookContext<
+  TDepsWithMeta = Record<string, unknown>,
+  TStore = Record<string, never>,
+  TApi = unknown,
+> {
   readonly pluginName: string;
   readonly pluginId: PluginId;
   readonly kernel: KernelContext;
   readonly plugins: TDepsWithMeta;
+  readonly store: TStore;
+  readonly api?: TApi; // Available only in onReady and onShutdown
 }
 
 // Lifecycle hooks
-export type LifecycleHook<TDeps = Record<string, unknown>> = (
-  context: LifecycleHookContext<TDeps>
-) => void | Promise<void>;
+export type LifecycleHook<
+  TDeps = Record<string, unknown>,
+  TStore = Record<string, never>,
+  TApi = unknown,
+> = (context: LifecycleHookContext<TDeps, TStore, TApi>) => void | Promise<void>;
 
-export interface PluginLifecycleHooks<TDeps = Record<string, unknown>> {
-  readonly onInit?: LifecycleHook<TDeps>;
-  readonly onReady?: LifecycleHook<TDeps>;
-  readonly onShutdown?: LifecycleHook<TDeps>;
-  readonly onError?: (error: Error, context: LifecycleHookContext<TDeps>) => void | Promise<void>;
+export interface PluginLifecycleHooks<
+  TDeps = Record<string, unknown>,
+  TStore = Record<string, never>,
+  TApi = unknown,
+> {
+  readonly onInit?: LifecycleHook<TDeps, TStore, never>; // onInit: no API yet
+  readonly onReady?: LifecycleHook<TDeps, TStore, TApi>; // onReady: API available
+  readonly onShutdown?: LifecycleHook<TDeps, TStore, TApi>; // onShutdown: API available
+  readonly onError?: (
+    error: Error,
+    context: LifecycleHookContext<TDeps, TStore, never>
+  ) => void | Promise<void>; // onError: no API
 }
 
 // Created branded type helpers

@@ -12,10 +12,10 @@ import type { PluginId } from '@/core';
 
 /**
  * Context provided to proxy interceptors
- * Contains method info, args, and control methods
- * TData: Type for ctx.data - allows type-safe custom properties between interceptors
+ * Contains method info, args, control methods, and shared store
+ * TStore: Type for ctx.store - shared state between lifecycle/setup/proxy
  */
-export interface ProxyContext<TMethod extends (...args: any[]) => any, TData = any> {
+export interface ProxyContext<TMethod extends (...args: any[]) => any, TStore = any> {
   // Method information
   readonly plugin: string;
   readonly method: string;
@@ -26,8 +26,8 @@ export interface ProxyContext<TMethod extends (...args: any[]) => any, TData = a
   _overrideResult?: Awaited<ReturnType<TMethod>>;
   _modifiedArgs?: Parameters<TMethod>;
 
-  // Custom data object (shared between interceptors) - fully mutable and type-safe!
-  data: TData;
+  // Shared store (type-safe, mutable, shared across lifecycle/setup/proxy)
+  readonly store: TStore;
 
   // Helper methods for controlling execution
   skip: () => void;
@@ -43,34 +43,34 @@ export interface ProxyContext<TMethod extends (...args: any[]) => any, TData = a
  * Before interceptor - runs before method execution
  * Return void to continue, or use ctx.skip()/ctx.replace() to control flow
  */
-export type ProxyBefore<TMethod extends (...args: any[]) => any, TData = any> = (
-  ctx: ProxyContext<TMethod, TData>
+export type ProxyBefore<TMethod extends (...args: any[]) => any, TStore = any> = (
+  ctx: ProxyContext<TMethod, TStore>
 ) => void | Promise<void>;
 
 /**
  * After interceptor - runs after successful method execution
  * Can modify the result by returning a new value
  */
-export type ProxyAfter<TMethod extends (...args: any[]) => any, TData = any> = (
+export type ProxyAfter<TMethod extends (...args: any[]) => any, TStore = any> = (
   result: Awaited<ReturnType<TMethod>>,
-  ctx: ProxyContext<TMethod, TData>
+  ctx: ProxyContext<TMethod, TStore>
 ) => Awaited<ReturnType<TMethod>> | Promise<Awaited<ReturnType<TMethod>>>;
 
 /**
  * Error interceptor - runs when method throws an error
  * Can return a fallback value or re-throw
  */
-export type ProxyError<TMethod extends (...args: any[]) => any, TData = any> = (
+export type ProxyError<TMethod extends (...args: any[]) => any, TStore = any> = (
   error: Error,
-  ctx: ProxyContext<TMethod, TData>
+  ctx: ProxyContext<TMethod, TStore>
 ) => Awaited<ReturnType<TMethod>> | Promise<Awaited<ReturnType<TMethod>>> | never;
 
 /**
  * Around interceptor - full control over method execution
  * Use next() to call the original method
  */
-export type ProxyAround<TMethod extends (...args: any[]) => any, TData = any> = (
-  ctx: ProxyContext<TMethod, TData>,
+export type ProxyAround<TMethod extends (...args: any[]) => any, TStore = any> = (
+  ctx: ProxyContext<TMethod, TStore>,
   next: () => Promise<Awaited<ReturnType<TMethod>>>
 ) => Promise<Awaited<ReturnType<TMethod>>>;
 
@@ -79,56 +79,30 @@ export type ProxyAround<TMethod extends (...args: any[]) => any, TData = any> = 
 // ============================================================================
 
 /**
- * Method selection options
- */
-export type MethodSelector<TPlugin> =
-  | '*' // All methods
-  | keyof TPlugin // Single method
-  | Array<keyof TPlugin>; // Multiple methods
-
-/**
- * Pattern for method matching (glob-style)
+ * Pattern for method matching (glob-style or regex)
  */
 export type MethodPattern = string | RegExp;
 
 /**
- * Proxy configuration - can be an object or a factory function
- * Using factory function allows TypeScript to infer ctx.data types automatically!
+ * Proxy configuration - object with interceptors
+ * Store is accessible via ctx.store in all interceptors
  */
-export interface ProxyConfigObject<TPlugin = any, TData = any> {
-  // Method selection (mutually exclusive with include/exclude)
-  methods?: MethodSelector<TPlugin>;
-
-  // Advanced filtering
+export interface ProxyConfig<TStore = any> {
+  // Method filtering (glob patterns or regex)
   include?: MethodPattern[];
   exclude?: MethodPattern[];
 
-  // Interceptors (now with typed context data)
-  before?: ProxyBefore<any, TData>;
-  after?: ProxyAfter<any, TData>;
-  onError?: ProxyError<any, TData>;
-  around?: ProxyAround<any, TData>;
+  // Interceptors (with access to typed store via ctx.store)
+  before?: ProxyBefore<any, TStore>;
+  after?: ProxyAfter<any, TStore>;
+  onError?: ProxyError<any, TStore>;
+  around?: ProxyAround<any, TStore>;
 
   // Advanced options
   priority?: number;
-  condition?: (ctx: ProxyContext<any>) => boolean;
+  condition?: (ctx: ProxyContext<any, TStore>) => boolean;
   group?: string;
 }
-
-/**
- * Factory function for proxy config - allows type inference for ctx.data!
- * The context passed has a mutable data object shared across all interceptors
- */
-export type ProxyConfigFactory<TPlugin = any> = (
-  ctx: ProxyContext<any, Record<string, any>>
-) => ProxyConfigObject<TPlugin, Record<string, any>>;
-
-/**
- * Proxy configuration - object or factory function
- */
-export type ProxyConfig<TPlugin = any, TData = any> =
-  | ProxyConfigObject<TPlugin, TData>
-  | ProxyConfigFactory<TPlugin>;
 
 // ============================================================================
 // INTERNAL TYPES - For kernel/extension manager
@@ -148,7 +122,6 @@ export type ProxyTarget = PluginId | 'self' | '*' | '**';
  */
 export interface ProxyMetadata {
   readonly targetPluginId: ProxyTarget;
-  // Can be a config object or a factory function
   readonly config: ProxyConfig<any>;
 }
 
@@ -165,8 +138,6 @@ export interface CompiledMethodProxy {
   readonly priority: number;
   readonly condition?: (ctx: ProxyContext<any>) => boolean;
   readonly group?: string;
-  // Factory function if config was a function (for type inference)
-  readonly configFactory?: ProxyConfigFactory<any>;
 }
 
 // ============================================================================
@@ -200,18 +171,8 @@ export function matchesPattern(methodName: string, pattern: MethodPattern): bool
 /**
  * Check if a method should be proxied based on config
  */
-export function shouldProxyMethod<TPlugin>(
-  methodName: string,
-  config: ProxyConfigObject<TPlugin>
-): boolean {
-  // Check explicit methods selector
-  if (config.methods !== undefined) {
-    if (config.methods === '*') return true;
-    if (typeof config.methods === 'string') return config.methods === methodName;
-    if (Array.isArray(config.methods)) return config.methods.includes(methodName as any);
-  }
-
-  // Check include patterns
+export function shouldProxyMethod(methodName: string, config: ProxyConfig): boolean {
+  // Check include patterns (if specified, method must match)
   if (config.include && config.include.length > 0) {
     const included = config.include.some((pattern: MethodPattern) =>
       matchesPattern(methodName, pattern)
@@ -219,7 +180,7 @@ export function shouldProxyMethod<TPlugin>(
     if (!included) return false;
   }
 
-  // Check exclude patterns
+  // Check exclude patterns (if method matches, exclude it)
   if (config.exclude && config.exclude.length > 0) {
     const excluded = config.exclude.some((pattern: MethodPattern) =>
       matchesPattern(methodName, pattern)
@@ -227,7 +188,7 @@ export function shouldProxyMethod<TPlugin>(
     if (excluded) return false;
   }
 
-  // If no selector specified, proxy all methods
+  // If no selectors specified, proxy all methods by default
   return true;
 }
 
@@ -238,14 +199,14 @@ export function shouldProxyMethod<TPlugin>(
 /**
  * Skip method execution
  */
-export function skipExecution(ctx: ProxyContext<any>): void {
+export function skipExecution<TStore = any>(ctx: ProxyContext<any, TStore>): void {
   ctx._skipExecution = true;
 }
 
 /**
  * Replace method result
  */
-export function replaceResult<T>(ctx: ProxyContext<any>, result: T): void {
+export function replaceResult<T, TStore = any>(ctx: ProxyContext<any, TStore>, result: T): void {
   ctx._skipExecution = true;
   ctx._overrideResult = result;
 }
@@ -253,8 +214,8 @@ export function replaceResult<T>(ctx: ProxyContext<any>, result: T): void {
 /**
  * Modify method arguments
  */
-export function modifyArgs<TMethod extends (...args: any[]) => any>(
-  ctx: ProxyContext<TMethod>,
+export function modifyArgs<TMethod extends (...args: any[]) => any, TStore = any>(
+  ctx: ProxyContext<TMethod, TStore>,
   ...newArgs: Parameters<TMethod>
 ): void {
   ctx._modifiedArgs = newArgs;
@@ -262,15 +223,12 @@ export function modifyArgs<TMethod extends (...args: any[]) => any>(
 
 /**
  * Attach helper methods to context
+ * Store must be provided separately and is immutable reference
  */
-export function enhanceContext<TMethod extends (...args: any[]) => any, TData = any>(
-  ctx: ProxyContext<TMethod, TData>
-): ProxyContext<TMethod, TData> {
-  // Add data object if not present
-  if (!ctx.data) {
-    (ctx as any).data = {};
-  }
-
+export function enhanceContext<
+  TMethod extends (...args: any[]) => any,
+  TStore = Record<string, never>,
+>(ctx: ProxyContext<TMethod, TStore>): ProxyContext<TMethod, TStore> {
   // Add helper methods
   (ctx as any).skip = (): void => skipExecution(ctx);
   (ctx as any).replace = (result: Awaited<ReturnType<TMethod>>): void => replaceResult(ctx, result);

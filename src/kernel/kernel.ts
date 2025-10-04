@@ -28,16 +28,26 @@ export interface BuiltKernel<TPlugins> {
 }
 
 // Builder Kernel
-export interface KernelBuilder<U extends BuiltPlugin<string, unknown, unknown, unknown> = never> {
-  use<P extends BuiltPlugin<string, unknown, unknown, unknown>>(plugin: P): KernelBuilder<U | P>;
+export interface KernelBuilder<
+  U extends BuiltPlugin<string, unknown, unknown, unknown, any> = never,
+> {
+  use<P extends BuiltPlugin<string, unknown, unknown, unknown, any>>(
+    plugin: P
+  ): KernelBuilder<U | P>;
 
   withConfig(config: Partial<KernelConfig>): KernelBuilder<U>;
 
   // Proxy methods - allows kernel-level proxying
   // 1. Single plugin proxy: proxy specific plugin
-  proxy<TTargetName extends string, TTargetApi>(
-    target: BuiltPlugin<TTargetName, TTargetApi, unknown, unknown>,
-    config: ProxyConfig<TTargetApi>
+  proxy<
+    TTargetName extends string,
+    TTargetApi,
+    TTargetExtMap = unknown,
+    TTargetMetadata = unknown,
+    TTargetStore = any,
+  >(
+    target: BuiltPlugin<TTargetName, TTargetApi, TTargetExtMap, TTargetMetadata, TTargetStore>,
+    config: ProxyConfig<TTargetStore>
   ): KernelBuilder<U>;
 
   // 2. Global proxy: proxy all plugins in kernel
@@ -49,10 +59,10 @@ export interface KernelBuilder<U extends BuiltPlugin<string, unknown, unknown, u
 }
 
 // Builder Implementation
-class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown, unknown> = never>
+class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, unknown> = never>
   implements KernelBuilder<U>
 {
-  private plugins: BuiltPlugin<string, unknown, unknown, unknown>[] = [];
+  private plugins: BuiltPlugin<string, unknown, unknown, unknown, unknown>[] = [];
   private kernelProxies: ProxyMetadata[] = [];
   private config: KernelConfig = {
     autoGlobal: true,
@@ -63,8 +73,10 @@ class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown, unknown>
     logLevel: 'info',
   };
 
-  use<P extends BuiltPlugin<string, unknown, unknown, unknown>>(plugin: P): KernelBuilder<U | P> {
-    this.plugins.push(plugin as BuiltPlugin<string, unknown, unknown, unknown>);
+  use<P extends BuiltPlugin<string, unknown, unknown, unknown, any>>(
+    plugin: P
+  ): KernelBuilder<U | P> {
+    this.plugins.push(plugin as BuiltPlugin<string, unknown, unknown, unknown, any>);
     return this as unknown as KernelBuilder<U | P>;
   }
 
@@ -88,7 +100,7 @@ class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown, unknown>
       });
     } else {
       // Single plugin proxy
-      const target = targetOrSymbol as BuiltPlugin<string, unknown, unknown, unknown>;
+      const target = targetOrSymbol as BuiltPlugin<string, unknown, unknown, unknown, unknown>;
       this.kernelProxies.push({
         targetPluginId: target.id,
         config: config as any,
@@ -108,11 +120,11 @@ class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown, unknown>
 }
 
 // Built Kernel Implementation
-class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown>>
+class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, unknown>>
   implements BuiltKernel<PluginsMap<U>>
 {
   constructor(
-    private readonly plugins: readonly BuiltPlugin<string, unknown, unknown, unknown>[],
+    private readonly plugins: readonly BuiltPlugin<string, unknown, unknown, unknown, unknown>[],
     private readonly kernelProxies: readonly ProxyMetadata[],
     private readonly config: KernelConfig
   ) {}

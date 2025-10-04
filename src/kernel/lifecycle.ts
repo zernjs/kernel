@@ -10,7 +10,6 @@ import {
   Result,
   createPluginId,
   createKernelId,
-  LifecycleHookContext,
   PluginDependency,
 } from '@/core';
 import type { PluginContainer } from './container';
@@ -201,27 +200,33 @@ class LifecycleManagerImpl implements LifecycleManager {
       // Build plugins with metadata for hooks
       const pluginsWithMetadata = this.buildPluginsWithMetadata(container, plugin.dependencies);
 
-      const hookContext: LifecycleHookContext = {
-        pluginName,
-        pluginId: plugin.id,
-        kernel: kernelContext,
-        plugins: pluginsWithMetadata,
-      };
-
-      // Execute onInit hook (before setup)
+      // Execute onInit hook (before setup) - no API yet
       if (plugin.hooks.onInit) {
-        await plugin.hooks.onInit(hookContext);
+        const onInitContext = {
+          pluginName,
+          pluginId: plugin.id,
+          kernel: kernelContext,
+          plugins: pluginsWithMetadata,
+          store: plugin.store,
+        };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await plugin.hooks.onInit(onInitContext as any);
       }
 
       const instance = plugin.setupFn({
         plugins: deps,
         kernel: kernelContext,
+        store: plugin.store,
       });
 
       let finalInstance = instance;
       if (config.extensionsEnabled) {
         if (typeof instance === 'object' && instance !== null) {
-          finalInstance = extensions.applyExtensions(pluginName, instance as object) as unknown;
+          finalInstance = extensions.applyExtensions(
+            pluginName,
+            instance as object,
+            plugin.store
+          ) as unknown;
         }
       }
 
@@ -232,9 +237,18 @@ class LifecycleManagerImpl implements LifecycleManager {
 
       registry.setState(createPluginId(pluginName), PluginState.LOADED);
 
-      // Execute onReady hook (after everything is initialized)
+      // Execute onReady hook (after everything is initialized) - API available
       if (plugin.hooks.onReady) {
-        await plugin.hooks.onReady(hookContext);
+        const onReadyContext = {
+          pluginName,
+          pluginId: plugin.id,
+          kernel: kernelContext,
+          plugins: pluginsWithMetadata,
+          store: plugin.store,
+          api: finalInstance,
+        };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await plugin.hooks.onReady(onReadyContext as any);
       }
     } catch (error) {
       registry.setState(createPluginId(pluginName), PluginState.ERROR);
@@ -257,15 +271,17 @@ class LifecycleManagerImpl implements LifecycleManager {
           pluginResult.data.dependencies
         );
 
-        const hookContext: LifecycleHookContext = {
+        const onErrorContext = {
           pluginName,
           pluginId: pluginResult.data.id,
           kernel: kernelContext,
           plugins: pluginsWithMetadata,
+          store: pluginResult.data.store,
         };
 
         try {
-          await pluginResult.data.hooks.onError(error as Error, hookContext);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await pluginResult.data.hooks.onError(error as Error, onErrorContext as any);
         } catch (hookError) {
           // If error hook fails, log but continue throwing original error
           console.error(`Error hook failed for plugin ${pluginName}:`, hookError);
@@ -301,14 +317,21 @@ class LifecycleManagerImpl implements LifecycleManager {
               pluginResult.data.dependencies
             );
 
-            const hookContext: LifecycleHookContext = {
+            // Get current plugin instance for API
+            const instanceResult = container.getInstance(pluginName);
+            const api = instanceResult.success ? instanceResult.data : undefined;
+
+            const onShutdownContext = {
               pluginName,
               pluginId: pluginResult.data.id,
               kernel: kernelContext,
               plugins: pluginsWithMetadata,
+              store: pluginResult.data.store,
+              api,
             };
 
-            await pluginResult.data.hooks.onShutdown(hookContext);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            await pluginResult.data.hooks.onShutdown(onShutdownContext as any);
           } catch (error) {
             console.error(`Shutdown hook failed for plugin ${pluginName}:`, error);
           }

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @file Type utilities for advanced TypeScript operations
  * @description Provides reusable type-level functions for the kernel
@@ -9,23 +10,17 @@ import type { BuiltPlugin } from '@/plugin';
  * Extracts the plugin name from a BuiltPlugin type
  */
 export type PluginNameOf<P> =
-  P extends BuiltPlugin<infer N, unknown, unknown, unknown>
-    ? N extends string
-      ? N
-      : never
-    : never;
+  P extends BuiltPlugin<infer N, any, any, any, any> ? (N extends string ? N : never) : never;
 
 /**
  * Extracts the extension map from a BuiltPlugin type
  */
-export type PluginExtMapOf<P> =
-  P extends BuiltPlugin<string, unknown, infer M, unknown> ? M : never;
+export type PluginExtMapOf<P> = P extends BuiltPlugin<string, any, infer M, any, any> ? M : never;
 
 /**
  * Extracts the metadata type from a BuiltPlugin type
  */
-export type PluginMetadataOf<P> =
-  P extends BuiltPlugin<string, unknown, unknown, infer M> ? M : never;
+export type PluginMetadataOf<P> = P extends BuiltPlugin<string, any, any, infer M, any> ? M : never;
 
 /**
  * Gets extensions for a specific target plugin
@@ -51,8 +46,8 @@ export type UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never
  * Extracts the API type for a plugin with a specific name
  */
 export type ApiForName<U, Name extends string> =
-  Extract<U, BuiltPlugin<Name, unknown, unknown, unknown>> extends infer Match
-    ? Match extends BuiltPlugin<Name, infer A, unknown, unknown>
+  Extract<U, BuiltPlugin<Name, any, any, any, any>> extends infer Match
+    ? Match extends BuiltPlugin<Name, infer A, any, any, any>
       ? A
       : never
     : never;
@@ -61,8 +56,8 @@ export type ApiForName<U, Name extends string> =
  * Extracts the metadata type for a plugin with a specific name
  */
 export type MetadataForName<U, Name extends string> =
-  Extract<U, BuiltPlugin<Name, unknown, unknown, unknown>> extends infer Match
-    ? Match extends BuiltPlugin<Name, unknown, unknown, infer M>
+  Extract<U, BuiltPlugin<Name, any, any, any, any>> extends infer Match
+    ? Match extends BuiltPlugin<Name, any, any, infer M, any>
       ? M
       : never
     : never;
@@ -119,8 +114,8 @@ export type PluginsMapWithMetadata<U> = {
   [K in PluginNameOf<U>]: PluginWithMetadata<
     ApiForName<U, K> & ExtensionsForName<U, K>,
     K,
-    Extract<U, BuiltPlugin<K, unknown, unknown, unknown>>['version'],
-    Extract<U, BuiltPlugin<K, unknown, unknown, unknown>>['id'],
+    Extract<U, BuiltPlugin<K, any, any, any, any>>['version'],
+    Extract<U, BuiltPlugin<K, any, any, any, any>>['id'],
     MetadataForName<U, K>
   >;
 };
