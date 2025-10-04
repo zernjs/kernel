@@ -54,6 +54,7 @@
 | 🔧 **API Extensions**             | Plugins can seamlessly extend other plugins' APIs                    |
 | 🎭 **Method Proxying**            | Intercept and modify behavior with before/after/around hooks         |
 | ⏱️ **Lifecycle Hooks**            | `onInit`, `onReady`, `onShutdown`, `onError` for resource management |
+| 🗄️ **Shared Store**               | Type-safe mutable state shared across lifecycle, setup, and proxies  |
 | 🏷️ **Custom Metadata**            | Attach and access metadata with full type safety via `$meta`         |
 | 📦 **Direct Exports**             | Import plugin methods directly like a normal library                 |
 | 🛡️ **Result Pattern**             | Functional error handling without exceptions                         |
@@ -164,7 +165,53 @@ const calculatorPlugin = plugin('calculator', '1.0.0')
   }));
 ```
 
-### 3. API Extensions
+### 3. Shared Store
+
+Create type-safe shared state accessible across all plugin stages:
+
+```typescript
+const databasePlugin = plugin('database', '1.0.0')
+  .store(() => ({
+    connection: null as Connection | null,
+    queryCount: 0,
+    startTime: Date.now(),
+  }))
+  .onInit(async ({ store }) => {
+    // Initialize connection in store
+    store.connection = await createConnection();
+  })
+  .proxy({
+    include: ['*'],
+    before: ctx => {
+      // Track queries in store
+      ctx.store.queryCount++;
+    },
+  })
+  .setup(({ store }) => ({
+    query: async (sql: string) => {
+      // Access store in methods
+      if (!store.connection) throw new Error('Not connected');
+      return await store.connection.execute(sql);
+    },
+    getStats: () => ({
+      queries: store.queryCount,
+      uptime: Date.now() - store.startTime,
+    }),
+  }))
+  .onReady(({ store, api }) => {
+    // Access both store and api in hooks
+    console.log(`Database ready. Stats:`, api.getStats());
+  });
+```
+
+**Key Benefits:**
+
+- ✅ Automatic type inference (no generics needed)
+- ✅ Accessible in `onInit`, `setup`, `proxy`, `onReady`, `onShutdown`
+- ✅ Mutable state that persists across plugin lifecycle
+- ✅ Each plugin has its own isolated store
+
+### 4. API Extensions
 
 Extend another plugin's API transparently:
 
@@ -184,7 +231,7 @@ math.power(2, 3); // ✅ Extended method available!
 math.sqrt(16); // ✅ All extensions are merged
 ```
 
-### 4. Method Proxying
+### 5. Method Proxying
 
 Intercept and modify plugin behavior:
 
@@ -192,7 +239,7 @@ Intercept and modify plugin behavior:
 const loggingPlugin = plugin('logging', '1.0.0')
   .depends(mathPlugin, '^1.0.0')
   .proxy(mathPlugin, {
-    methods: 'add', // Intercept specific method
+    include: ['add'], // Intercept specific method
     before: ctx => {
       console.log(`[LOG] Calling ${ctx.method} with:`, ctx.args);
     },
@@ -208,7 +255,7 @@ const loggingPlugin = plugin('logging', '1.0.0')
 
 ```typescript
 // 1. Self-proxy: Intercept own methods
-.proxy({ methods: 'add', before: ctx => console.log('self') })
+.proxy({ include: ['add'], before: ctx => console.log('self') })
 
 // 2. Single plugin proxy: Intercept specific plugin
 .depends(mathPlugin, '^1.0.0')
@@ -221,7 +268,7 @@ const loggingPlugin = plugin('logging', '1.0.0')
 .proxy('**', { before: ctx => console.log('global') })
 ```
 
-### 5. Kernel-Level Proxies
+### 6. Kernel-Level Proxies
 
 Apply proxies at the application level:
 
@@ -229,18 +276,12 @@ Apply proxies at the application level:
 const kernel = await createKernel()
   .use(mathPlugin)
   .use(apiPlugin)
-  // Global timing for all plugins
-  .proxy('**', ctx => {
-    let startTime: number;
-    return {
-      before: () => {
-        startTime = Date.now();
-      },
-      after: result => {
-        console.log(`${ctx.plugin}.${ctx.method} took ${Date.now() - startTime}ms`);
-        return result;
-      },
-    };
+  // Global logging for all plugins
+  .proxy('**', {
+    priority: 80,
+    before: ctx => {
+      console.log(`[LOG] ${ctx.plugin}.${ctx.method}() called`);
+    },
   })
   // Specific auth for API plugin
   .proxy(apiPlugin, {
@@ -251,7 +292,7 @@ const kernel = await createKernel()
   .start();
 ```
 
-### 6. Lifecycle Hooks
+### 7. Lifecycle Hooks
 
 Manage plugin initialization, readiness, and cleanup:
 
@@ -277,7 +318,7 @@ const databasePlugin = plugin('database', '1.0.0')
   }));
 ```
 
-### 7. Direct Method Exports
+### 8. Direct Method Exports
 
 Use plugins like normal libraries:
 
@@ -348,19 +389,23 @@ const loggingPlugin = plugin('logging', '1.0.0')
   })
   .setup(() => ({}));
 
-// Performance monitoring
+// Performance monitoring (using plugin store)
 const timingPlugin = plugin('timing', '1.0.0')
-  .proxy('**', ctx => {
-    let start: number;
-    return {
-      before: () => {
-        start = Date.now();
-      },
-      after: result => {
-        console.log(`⏱️ ${ctx.method} took ${Date.now() - start}ms`);
-        return result;
-      },
-    };
+  .store(() => new Map<string, number>()) // Map to store start times by method
+  .proxy('**', {
+    before: ctx => {
+      const key = `${ctx.plugin}.${ctx.method}`;
+      ctx.store.set(key, Date.now());
+    },
+    after: (result, ctx) => {
+      const key = `${ctx.plugin}.${ctx.method}`;
+      const startTime = ctx.store.get(key);
+      if (startTime) {
+        console.log(`⏱️ ${key} took ${Date.now() - startTime}ms`);
+        ctx.store.delete(key);
+      }
+      return result;
+    },
   })
   .setup(() => ({}));
 ```
@@ -447,6 +492,7 @@ const authPlugin = plugin('auth', '1.0.0')
 ```typescript
 plugin(name: string, version: string)
   .metadata(data: Record<string, unknown>)
+  .store(factory: () => state)                 // Shared plugin state
   .depends(plugin: BuiltPlugin, versionRange?: string)
   .extend(target: BuiltPlugin, fn: (api) => extensions)
   .proxy(config: ProxyConfig)                  // Self-proxy
