@@ -217,6 +217,18 @@ const databasePlugin = plugin('database', '1.0.0')
 - Each plugin instance has its own isolated store
 - For type safety, define the store type inline in the factory return
 
+**Reactive Features:**
+
+Stores are **automatically reactive** with powerful features like:
+
+- ✅ `watch()` - Monitor specific property changes
+- ✅ `watchAll()` - Monitor all changes
+- ✅ `batch()` - Group multiple changes
+- ✅ `transaction()` - Atomic updates with rollback
+- ✅ `computed()` - Memoized derived values
+
+> 📚 **For complete documentation on reactive stores**, see [Store System](./13-store-system.md)
+
 ### `.extend(target, fn)` - Extend Another Plugin
 
 ```typescript

@@ -28,6 +28,7 @@ Welcome to the Zern Kernel documentation! This comprehensive guide will help you
 9. [**API Reference**](./09-api-reference.md) - Complete API documentation
 10. [**Best Practices**](./10-best-practices.md) - Patterns, guidelines, and recommendations
 11. [**Proxy System**](./12-proxy-system.md) - Intercepting and modifying plugin method behavior
+12. [**Store System**](./13-store-system.md) - Reactive state management with automatic change tracking
 
 ---
 
@@ -37,6 +38,7 @@ Zern Kernel is a **plugin orchestration system** that provides:
 
 ✅ **Type-Safe Plugin Management** - Full TypeScript inference and autocomplete  
 ✅ **Dependency Resolution** - Automatic topological sorting with version checking  
+✅ **Reactive Store System** - Automatic state management with watchers and computed values  
 ✅ **API Extension** - Plugins can extend other plugins' APIs at runtime  
 ✅ **Method Proxying** - Intercept and modify plugin behavior with before/after/around hooks  
 ✅ **Lifecycle Hooks** - onInit, onReady, onShutdown, and onError hooks  
@@ -125,6 +127,12 @@ This documentation is organized in a **layered approach**, from bottom to top:
                       ▲
                       │
 ┌──────────────────────────────────────────────────┐
+│          Store Layer                              │
+│   (Reactive State, Watchers, Computed)           │
+└──────────────────────────────────────────────────┘
+                      ▲
+                      │
+┌──────────────────────────────────────────────────┐
 │          Core Layer                               │
 │   (Types, Result, Errors)                        │
 └──────────────────────────────────────────────────┘
@@ -145,25 +153,28 @@ Follow this recommended learning path:
 3. **[Plugin System →](./03-plugin-system.md)**  
    Master plugin creation and configuration
 
-4. **[Kernel Layer →](./04-kernel-layer.md)**  
+4. **[Store System →](./13-store-system.md)**  
+   Reactive state management with watchers and computed values
+
+5. **[Kernel Layer →](./04-kernel-layer.md)**  
    Understand kernel initialization and lifecycle
 
-5. **[Extension System →](./05-extension-system.md)**  
+6. **[Extension System →](./05-extension-system.md)**  
    Learn how to extend plugin APIs with new methods
 
-6. **[Direct Exports →](./06-direct-exports.md)**  
+7. **[Direct Exports →](./06-direct-exports.md)**  
    Create library-like exports for your plugins
 
-7. **[Lifecycle Hooks →](./11-lifecycle-hooks.md)**  
+8. **[Lifecycle Hooks →](./11-lifecycle-hooks.md)**  
    Manage plugin initialization, shutdown, and errors
 
-8. **[Proxy System →](./12-proxy-system.md)**  
+9. **[Proxy System →](./12-proxy-system.md)**  
    Intercept and modify plugin method behavior
 
-9. **[Type System →](./07-type-system.md)**  
-   Advanced type-level programming techniques
+10. **[Type System →](./07-type-system.md)**  
+    Advanced type-level programming techniques
 
-10. **[Best Practices →](./10-best-practices.md)**  
+11. **[Best Practices →](./10-best-practices.md)**  
     Apply recommended patterns and guidelines
 
 ---

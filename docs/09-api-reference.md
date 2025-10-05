@@ -50,6 +50,33 @@ function plugin<TName extends string>(
 const mathPlugin = plugin('math', '1.0.0').setup(() => ({ add: (a, b) => a + b }));
 ```
 
+#### `createStore(initialState, options?)`
+
+Creates a reactive store with automatic change tracking.
+
+```typescript
+function createStore<TStore extends Record<string, any>>(
+  initialState: TStore,
+  options?: StoreOptions
+): Store<TStore>;
+```
+
+**Parameters:**
+
+- `initialState` - Initial state object
+- `options` - Optional configuration (history, maxHistory, deep)
+
+**Returns:** A reactive `Store` instance
+
+**Example:**
+
+```typescript
+const store = createStore({ count: 0 }, { history: true });
+store.watch('count', change => console.log(change));
+```
+
+**Note:** When using `.store()` in plugins, stores are automatically reactive.
+
 ---
 
 ## 🔧 Kernel API
@@ -477,6 +504,118 @@ type ProxyAround<TMethod> = (
 ```
 
 See [Proxy System](./12-proxy-system.md) for complete documentation and examples.
+
+---
+
+## 💾 Store API
+
+### `createStore<T>(initialState: T, options?: StoreOptions): Store<T>`
+
+Creates a reactive store with automatic change tracking.
+
+```typescript
+import { createStore } from '@zern/kernel';
+
+const store = createStore({ count: 0, items: [] }, { history: true, maxHistory: 50 });
+
+// Store is automatically reactive
+store.watch('count', change => {
+  console.log(`Count: ${change.oldValue} → ${change.newValue}`);
+});
+
+store.count++; // Triggers watcher
+```
+
+**Note:** When using `.store()` in plugins, the store is automatically created as reactive. You only need `createStore()` for external usage.
+
+### Store Methods
+
+#### `watch<K>(key: K, callback: WatchCallback): () => void`
+
+Watch a specific property for changes.
+
+```typescript
+const unwatch = store.watch('count', change => {
+  console.log(change.oldValue, change.newValue);
+});
+
+unwatch(); // Stop watching
+```
+
+#### `watchAll(callback: WatchAllCallback): () => void`
+
+Watch all property changes.
+
+```typescript
+store.watchAll(change => {
+  console.log(`${change.key} changed`);
+});
+```
+
+#### `watchBatch(callback: WatchBatchCallback): () => void`
+
+Watch batched changes (fires once per batch).
+
+```typescript
+store.watchBatch(changes => {
+  console.log(`${changes.length} properties changed`);
+});
+```
+
+#### `batch(fn: () => void): void`
+
+Group multiple changes into a single notification.
+
+```typescript
+store.batch(() => {
+  store.count++;
+  store.items.push(1);
+  store.total++;
+}); // All watchers notified once
+```
+
+#### `transaction<T>(fn: () => Promise<T>): Promise<T>`
+
+Execute changes in a transaction (commit on success, rollback on error).
+
+```typescript
+await store.transaction(async () => {
+  store.count = 100;
+  await saveToDatabase();
+  // If error, count is rolled back
+});
+```
+
+#### `computed<T>(selector: (store) => T): ComputedValue<T>`
+
+Create a memoized computed value.
+
+```typescript
+const doubled = store.computed(s => s.count * 2);
+console.log(doubled.value); // Auto-memoized
+```
+
+### Store Types
+
+```typescript
+interface StoreChange<T> {
+  key: string;
+  oldValue: T;
+  newValue: T;
+  timestamp: Date;
+  metadata?: Record<string, any>;
+}
+
+interface StoreOptions {
+  history?: boolean;
+  maxHistory?: number;
+  deep?: boolean;
+}
+
+type Store<T> = T & StoreMethods<T>;
+```
+
+See [Store System](./13-store-system.md) for complete documentation and examples.
 
 ---
 
