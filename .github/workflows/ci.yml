@@ -59,15 +59,43 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '20.x', cache: 'pnpm' }
       - run: pnpm install --frozen-lockfile
+
       - name: Audit (high+)
         run: pnpm run audit:ci
+
       - name: Generate SBOM (Syft via Docker)
         run: docker run --rm -v ${PWD}:/work -w /work anchore/syft:latest dir:. -o cyclonedx-json=sbom.json
+
       - name: Upload SBOM
         uses: actions/upload-artifact@v4
         with:
           name: sbom-cyclonedx
           path: sbom.json
+
+  vulnerability_scan:
+    name: OSV Scanner (Vulnerability Detection)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OSV Scanner
+        uses: google/osv-scanner-action/osv-scanner-action@v1.8.5
+        continue-on-error: true
+        with:
+          scan-args: |-
+            --lockfile=pnpm-lock.yaml
+            --format=sarif
+            --output=osv-results.sarif
+
+      - name: Upload OSV Scanner results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: osv-results.sarif
+          category: osv-scanner
 
   build_tarball:
     name: Build package tarball

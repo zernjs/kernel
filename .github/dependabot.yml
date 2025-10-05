@@ -1,0 +1,45 @@
+version: 2
+updates:
+  # Enable version updates for npm/pnpm dependencies
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '03:00'
+    open-pull-requests-limit: 5
+    reviewers:
+      - 'zernjs/maintainers'
+    commit-message:
+      prefix: 'chore(deps):'
+      include: 'scope'
+    labels:
+      - 'dependencies'
+      - 'automated'
+    # Security updates only for production dependencies
+    groups:
+      security-updates:
+        dependency-type: 'production'
+        update-types:
+          - 'patch'
+          - 'minor'
+    versioning-strategy: increase-if-necessary
+
+  # Keep GitHub Actions up to date
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '03:00'
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: 'chore(ci):'
+      include: 'scope'
+    labels:
+      - 'ci'
+      - 'automated'
+    groups:
+      ci-dependencies:
+        patterns:
+          - '*'
