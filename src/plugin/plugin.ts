@@ -1,8 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/**
- * @file Plugin system with builder pattern for the Zern Kernel
- * @description Provides an fluent type-safe API for plugin creation and management
- */
 
 import type {
   KernelContext,
@@ -18,7 +14,6 @@ import type { ProxyConfig, ProxyMetadata, ProxyTarget } from '@/extension/proxy-
 import { createStore, isStore } from '@/store';
 import type { Store } from '@/store';
 
-// Context available in plugin setup function
 export interface PluginSetupContext<
   TDeps = Record<string, never>,
   TStore extends Record<string, any> = Record<string, never>,
@@ -28,7 +23,6 @@ export interface PluginSetupContext<
   readonly store: Store<TStore>;
 }
 
-// Plugin builted, result of the setup function
 export interface BuiltPlugin<
   TName extends string,
   TApi,
@@ -46,13 +40,10 @@ export interface BuiltPlugin<
   readonly metadata: TMetadata;
   readonly store: Store<TStore>;
   readonly setupFn: (ctx: PluginSetupContext<Record<string, unknown>, TStore>) => TApi;
-  // Phantom type to carry compile-time extension info
   readonly __extensions__?: TExtMap | undefined;
 
-  // Self-proxy method (only self-proxy is allowed on BuiltPlugin)
   proxy(config: ProxyConfig<TStore>): BuiltPlugin<TName, TApi, TExtMap, TMetadata, TStore>;
 
-  // Lifecycle hooks can be added after setup (with access to TApi type)
   onInit(
     hook: PluginLifecycleHooks<Record<string, unknown>, TStore, never>['onInit']
   ): BuiltPlugin<TName, TApi, TExtMap, TMetadata, TStore>;
@@ -67,7 +58,6 @@ export interface BuiltPlugin<
   ): BuiltPlugin<TName, TApi, TExtMap, TMetadata, TStore>;
 }
 
-// Plugin builder
 export interface PluginBuilder<
   TName extends string,
   TApi = unknown,
@@ -76,7 +66,6 @@ export interface PluginBuilder<
   TMetadata = Record<string, unknown>,
   TStore extends Record<string, any> = Record<string, never>,
 > {
-  // Define shared store with automatic type inference
   store<TNewStore extends Record<string, any>>(
     factory: () => TNewStore
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TNewStore>;
@@ -119,13 +108,8 @@ export interface PluginBuilder<
     fn: (api: TTargetApi) => TExt
   ): PluginBuilder<TName, TApi, TDeps, TExtMap & Record<TTargetName, TExt>, TMetadata, TStore>;
 
-  // Unified proxy method for method interception
-  // Store is automatically injected into proxy context
-
-  // 1. Self-proxy: proxy own methods
   proxy(config: ProxyConfig<TStore>): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
-  // 2. Single plugin proxy: proxy specific plugin (must be in dependencies)
   proxy<
     TTargetName extends string,
     TTargetApi,
@@ -137,19 +121,16 @@ export interface PluginBuilder<
     config: ProxyConfig<TStore>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
-  // 3. Dependencies proxy: proxy all plugins in dependencies
   proxy(
     target: '*',
     config: ProxyConfig<TStore>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
-  // 4. Global proxy: proxy all plugins in kernel
   proxy(
     target: '**',
     config: ProxyConfig<TStore>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
-  // Lifecycle hooks - typed with dependencies + metadata + store + api (for onReady/onShutdown)
   onInit(
     hook: PluginLifecycleHooks<DepsWithMetadata<TDeps>, TStore>['onInit']
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
@@ -164,7 +145,6 @@ export interface PluginBuilder<
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 }
 
-// Builder plugin implementation
 class PluginBuilderImpl<
   TName extends string,
   TApi = unknown,
@@ -191,7 +171,6 @@ class PluginBuilderImpl<
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TNewStore> {
     const rawStore = factory();
 
-    // Make store reactive if it's not already
     this.pluginStore = (isStore(rawStore)
       ? rawStore
       : createStore(rawStore)) as unknown as Store<TStore>;
@@ -263,7 +242,6 @@ class PluginBuilderImpl<
     >;
   }
 
-  // Unified proxy method for method interception
   proxy(
     targetOrConfig: any,
     configOrUndefined?: any
@@ -271,24 +249,18 @@ class PluginBuilderImpl<
     let targetPluginId: ProxyTarget;
     let config: ProxyConfig<TStore>;
 
-    // Detect which overload was called
     if (configOrUndefined === undefined) {
-      // Case 1: Self-proxy - .proxy({ ... })
       targetPluginId = 'self';
       config = targetOrConfig;
     } else if (targetOrConfig === '*') {
-      // Case 3: Dependencies proxy - .proxy('*', { ... })
       targetPluginId = '*';
       config = configOrUndefined;
     } else if (targetOrConfig === '**') {
-      // Case 4: Global proxy - .proxy('**', { ... })
       targetPluginId = '**';
       config = configOrUndefined;
     } else {
-      // Case 2: Single plugin proxy - .proxy(plugin, { ... })
       const target = targetOrConfig as BuiltPlugin<string, any, any, any, any>;
 
-      // ✅ Validate that target is in dependencies
       const hasDependency = this.dependencies.some(dep => dep.pluginId === target.id);
 
       if (!hasDependency) {
@@ -302,7 +274,6 @@ class PluginBuilderImpl<
       config = configOrUndefined;
     }
 
-    // Store proxy metadata
     const proxyMetadata: ProxyMetadata = {
       targetPluginId,
       config: config as any,
@@ -313,7 +284,6 @@ class PluginBuilderImpl<
     return this as unknown as PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
   }
 
-  // Lifecycle hooks
   onInit(
     hook: PluginLifecycleHooks<DepsWithMetadata<TDeps>, TStore>['onInit']
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore> {
@@ -348,7 +318,6 @@ class PluginBuilderImpl<
     const setupFn = fn as unknown as (
       ctx: PluginSetupContext<Record<string, unknown>, TStore>
     ) => TNewApi;
-    // Hooks stored as any for flexibility - properly typed at runtime
     const hooks = this.hooks as any;
     return new BuiltPluginImpl(
       this.name,
@@ -364,7 +333,6 @@ class PluginBuilderImpl<
   }
 }
 
-// Built plugin implementation
 class BuiltPluginImpl<
   TName extends string,
   TApi,
@@ -389,7 +357,6 @@ class BuiltPluginImpl<
     this.id = createPluginId(name);
   }
 
-  // Self-proxy method for BuiltPlugin
   proxy(config: ProxyConfig<TStore>): BuiltPlugin<TName, TApi, TExtMap, TMetadata, TStore> {
     const proxyMetadata: ProxyMetadata = {
       targetPluginId: 'self',
@@ -402,14 +369,13 @@ class BuiltPluginImpl<
       this.setupFn,
       this.dependencies,
       this.extensions,
-      [...this.proxies, proxyMetadata], // Add new proxy
+      [...this.proxies, proxyMetadata],
       this.hooks,
       this.metadata,
       this.store
     );
   }
 
-  // Lifecycle hooks for BuiltPlugin (after setup)
   onInit(
     hook: PluginLifecycleHooks<Record<string, unknown>, TStore, never>['onInit']
   ): BuiltPlugin<TName, TApi, TExtMap, TMetadata, TStore> {
@@ -475,7 +441,21 @@ class BuiltPluginImpl<
   }
 }
 
-// Factory function for plugin builder
+/**
+ * Creates a new plugin with the specified name and version.
+ *
+ * @param name - Unique plugin identifier
+ * @param version - Semantic version (e.g., "1.0.0")
+ * @returns A plugin builder for configuring the plugin
+ *
+ * @example
+ * ```typescript
+ * const mathPlugin = plugin('math', '1.0.0')
+ *   .setup(() => ({
+ *     add: (a: number, b: number) => a + b
+ *   }));
+ * ```
+ */
 export function plugin<TName extends string>(
   name: TName,
   version: string

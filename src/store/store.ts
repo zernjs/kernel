@@ -1,16 +1,3 @@
-/**
- * @file Store Implementation (Optimized)
- * @description High-performance store with watch, batch, transactions, and computed values
- *
- * Performance optimizations:
- * - structuredClone for fast deep cloning (with manual fallback)
- * - Indexed watchers for O(1) lookups instead of O(n)
- * - Circular buffer for history (O(1) push)
- * - Dependency tracking for computed values
- * - Watcher limits to prevent memory leaks
- * - Performance metrics collection
- */
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type {
@@ -78,28 +65,24 @@ interface ComputedState {
   selector: ComputedSelector<any, any>;
   cache: any;
   dirty: boolean;
-  dependencies: Set<string>; // Track which keys this computed depends on
+  dependencies: Set<string>;
 }
 
 interface StoreState<TStore> {
-  // Indexed watchers for O(1) lookup
   watchersByKey: Map<string, Set<Watcher>>;
   allWatchers: Set<Watcher>;
   batchWatchers: Set<Watcher>;
   computedWatchers: Map<symbol, Set<Watcher>>;
 
-  // State management
   inBatch: boolean;
   batchChanges: StoreChange[];
   history: CircularBuffer<StoreChange>;
   historyEnabled: boolean;
   computed: Map<symbol, ComputedState>;
-  snapshot: TStore | null; // For transactions
+  snapshot: TStore | null;
 
-  // Configuration
   options: Required<StoreOptions>;
 
-  // Metrics
   metrics: {
     totalChanges: number;
     peakWatchers: number;
@@ -164,7 +147,6 @@ function fastClone<T>(obj: T, strategy: 'structured' | 'manual'): T {
     try {
       return (globalThis as any).structuredClone(obj);
     } catch {
-      // Fallback to manual if structuredClone fails
       return manualClone(obj);
     }
   }
@@ -239,12 +221,10 @@ function addWatcher(state: StoreState<any>, watcher: Watcher): void {
     );
   }
 
-  // Update peak
   if (currentTotal + 1 > state.metrics.peakWatchers) {
     state.metrics.peakWatchers = currentTotal + 1;
   }
 
-  // Add watcher based on type
   if (watcher.type === 'all') {
     state.allWatchers.add(watcher);
   } else if (watcher.type === 'batch') {
@@ -256,7 +236,6 @@ function addWatcher(state: StoreState<any>, watcher: Watcher): void {
     }
     state.computedWatchers.get(symbol)!.add(watcher);
   } else {
-    // Key watcher
     const key = watcher.key as string;
     if (!state.watchersByKey.has(key)) {
       state.watchersByKey.set(key, new Set());
@@ -264,7 +243,6 @@ function addWatcher(state: StoreState<any>, watcher: Watcher): void {
 
     const keyWatchers = state.watchersByKey.get(key)!;
 
-    // Check per-key limit
     if (keyWatchers.size >= state.options.maxWatchersPerKey) {
       if (state.options.warnOnHighWatcherCount) {
         console.warn(
@@ -277,7 +255,6 @@ function addWatcher(state: StoreState<any>, watcher: Watcher): void {
     keyWatchers.add(watcher);
   }
 
-  // Warn on high total count
   if (
     state.options.warnOnHighWatcherCount &&
     currentTotal > state.options.warnThreshold &&
@@ -334,33 +311,27 @@ async function notifyChange(store: any, change: StoreChange): Promise<void> {
   const state = getState(store);
   const startTime = state.options.enableMetrics ? now() : 0;
 
-  // Add to batch if we're in batch mode
   if (state.inBatch) {
     state.batchChanges.push(change);
     return;
   }
 
-  // Add to history
   if (state.historyEnabled) {
     state.history.push(change);
   }
 
-  // Update metrics
   if (state.options.enableMetrics) {
     state.metrics.totalChanges++;
   }
 
-  // Invalidate affected computed values (dependency-based)
   for (const [, computed] of state.computed) {
     if (computed.dependencies.has(change.key)) {
       computed.dirty = true;
     }
   }
 
-  // Notify watchers (optimized O(k) instead of O(n))
   const promises: Promise<void>[] = [];
 
-  // Key-specific watchers (O(1) lookup)
   const keyWatchers = state.watchersByKey.get(change.key);
   if (keyWatchers) {
     for (const watcher of keyWatchers) {
@@ -371,7 +342,6 @@ async function notifyChange(store: any, change: StoreChange): Promise<void> {
     }
   }
 
-  // All watchers
   for (const watcher of state.allWatchers) {
     const result = (watcher.callback as WatchAllCallback)(change);
     if (result instanceof Promise) {
@@ -381,11 +351,9 @@ async function notifyChange(store: any, change: StoreChange): Promise<void> {
 
   await Promise.all(promises);
 
-  // Record notification time
   if (state.options.enableMetrics) {
     const duration = now() - startTime;
     state.metrics.notificationTimes.push(duration);
-    // Keep only last 100 measurements
     if (state.metrics.notificationTimes.length > 100) {
       state.metrics.notificationTimes.shift();
     }
@@ -436,7 +404,7 @@ function trackDependencies<TStore>(
   try {
     selector(tracker);
   } catch {
-    // Ignore errors during dependency tracking
+    /* empty */
   }
 
   return dependencies;
@@ -447,25 +415,37 @@ function trackDependencies<TStore>(
 // ============================================================================
 
 /**
- * Create a store with automatic change tracking
+ * Creates a reactive store with automatic change tracking.
+ *
+ * @param initialState - Initial state object
+ * @param options - Configuration options for the store
+ * @returns A reactive store with methods for watching changes, computing values, and managing state
+ *
+ * @example
+ * ```typescript
+ * const store = createStore(
+ *   { count: 0, name: '' },
+ *   { history: true, enableMetrics: true }
+ * );
+ *
+ * store.watch('count', change => {
+ *   console.log(`Count changed: ${change.oldValue} → ${change.newValue}`);
+ * });
+ *
+ * store.count++; // Triggers watcher
+ * ```
  */
 export function createStore<TStore extends Record<string, any>>(
   initialState: TStore,
   options: StoreOptions = {}
 ): Store<TStore> {
-  // Store options on the object for later retrieval
   (initialState as any).__options__ = options;
-
-  // Initialize state
   const state = getState(initialState);
 
-  // Create proxy to intercept property access
   const proxy = new Proxy(initialState, {
     get(target: any, prop: string | symbol): any {
-      // API methods
       if (prop === 'watch') {
         return function watch(keyOrComputed: any, callback: any): () => void {
-          // Watch computed value
           if (
             typeof keyOrComputed === 'object' &&
             keyOrComputed !== null &&
@@ -485,7 +465,6 @@ export function createStore<TStore extends Record<string, any>>(
             };
           }
 
-          // Watch regular key
           const watcher: Watcher = {
             key: keyOrComputed as string,
             callback: callback as WatchCallback,
@@ -538,7 +517,6 @@ export function createStore<TStore extends Record<string, any>>(
           if (!watchers) return;
 
           if (callback) {
-            // Remove specific callback
             for (const watcher of watchers) {
               if (watcher.callback === callback) {
                 removeWatcher(state, watcher);
@@ -546,7 +524,6 @@ export function createStore<TStore extends Record<string, any>>(
               }
             }
           } else {
-            // Remove all watchers for this key
             for (const watcher of Array.from(watchers)) {
               removeWatcher(state, watcher);
             }
@@ -566,10 +543,8 @@ export function createStore<TStore extends Record<string, any>>(
             const changes = state.batchChanges;
             state.batchChanges = [];
 
-            // Notify batch watchers
             void notifyBatch(proxy, changes);
 
-            // Notify individual changes
             for (const change of changes) {
               void notifyChange(proxy, change);
             }
@@ -579,7 +554,6 @@ export function createStore<TStore extends Record<string, any>>(
 
       if (prop === 'transaction') {
         return async function transaction<T>(fn: () => Promise<T>): Promise<T> {
-          // Take snapshot using optimized clone
           state.snapshot = fastClone(target, state.options.cloneStrategy);
 
           try {
@@ -587,7 +561,6 @@ export function createStore<TStore extends Record<string, any>>(
             state.snapshot = null;
             return result;
           } catch (error) {
-            // Rollback: restore snapshot
             if (state.snapshot) {
               for (const key in state.snapshot) {
                 if (Object.prototype.hasOwnProperty.call(state.snapshot, key)) {
@@ -605,7 +578,6 @@ export function createStore<TStore extends Record<string, any>>(
         return function computed<T>(selector: ComputedSelector<TStore, T>): ComputedValue<T> {
           const computedId = Symbol('computed');
 
-          // Track dependencies
           const dependencies = trackDependencies(target as TStore, selector);
 
           state.computed.set(computedId, {
@@ -685,7 +657,6 @@ export function createStore<TStore extends Record<string, any>>(
         };
       }
 
-      // Internal properties
       if (prop === '__store__') return true;
       if (prop === '__watchers__') {
         const all: Watcher[] = [];
@@ -701,7 +672,6 @@ export function createStore<TStore extends Record<string, any>>(
       }
       if (prop === '__computed__') return state.computed;
 
-      // Regular property access
       return target[prop];
     },
 
@@ -713,7 +683,6 @@ export function createStore<TStore extends Record<string, any>>(
 
       const oldValue = target[prop];
 
-      // Only notify if value actually changed
       if (!isEqual(oldValue, value)) {
         target[prop] = value;
 

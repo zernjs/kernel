@@ -3,18 +3,14 @@
  * @description Generic, strongly-typed helpers for auto-binding and API creation
  */
 
-// Type-safe function representation
 type AnyFunction = (...args: unknown[]) => unknown;
 
-// Extract method names from an object type
 type MethodNames<T> = {
   [K in keyof T]: T[K] extends AnyFunction ? K : never;
 }[keyof T];
 
-// Extract only methods from an object type
 type MethodsOnly<T> = Pick<T, MethodNames<T>>;
 
-// Bound methods type
 type BoundMethods<T> = {
   [K in keyof MethodsOnly<T>]: T[K];
 };
@@ -31,10 +27,8 @@ export function bindMethods<T extends object>(
 ): BoundMethods<T> {
   const boundMethods = {} as BoundMethods<T>;
 
-  // Get all method names from instance and prototype
   const allMethods = new Set<string>();
 
-  // Instance methods
   Object.getOwnPropertyNames(instance).forEach(name => {
     const value = (instance as Record<string, unknown>)[name];
     if (typeof value === 'function' && !excludeMethods.includes(name)) {
@@ -42,7 +36,6 @@ export function bindMethods<T extends object>(
     }
   });
 
-  // Prototype methods
   Object.getOwnPropertyNames(Object.getPrototypeOf(instance)).forEach(name => {
     const value = (instance as Record<string, unknown>)[name];
     if (typeof value === 'function' && !excludeMethods.includes(name)) {
@@ -50,7 +43,6 @@ export function bindMethods<T extends object>(
     }
   });
 
-  // Bind all methods
   allMethods.forEach(methodName => {
     const method = (instance as Record<string, unknown>)[methodName] as AnyFunction;
     (boundMethods as Record<string, AnyFunction>)[methodName] = method.bind(instance);
@@ -99,7 +91,6 @@ export function createAPIFactory<T, TConfig = Record<string, unknown>>(
   return (config?: TConfig) => {
     const instances = implementations.map(factory => factory());
 
-    // Apply configuration to instances that support it
     if (config) {
       instances.forEach(instance => {
         if (instance && typeof instance === 'object' && 'configure' in instance) {

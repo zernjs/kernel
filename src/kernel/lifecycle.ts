@@ -53,7 +53,6 @@ class LifecycleManagerImpl implements LifecycleManager {
             ? depMetadata.data.metadata
             : {};
 
-        // Combine API with metadata
         plugins[dep.pluginId] = {
           ...apiData,
           $meta: {
@@ -79,12 +78,9 @@ class LifecycleManagerImpl implements LifecycleManager {
       const registry = container.getRegistry();
       const plugins = registry.getAll();
 
-      // Register kernel-level proxies first
       if (kernelProxies.length > 0) {
         for (const proxy of kernelProxies) {
-          // Expand kernel proxy targets
           if (proxy.targetPluginId === '**') {
-            // Global proxy: register for ALL plugins
             for (const targetPlugin of plugins) {
               extensions.registerProxy({
                 targetPluginId: targetPlugin.id,
@@ -92,30 +88,24 @@ class LifecycleManagerImpl implements LifecycleManager {
               });
             }
           } else {
-            // Single plugin proxy: register normally
             extensions.registerProxy(proxy);
           }
         }
       }
 
-      // Register all extensions and proxies before initializing plugins so targets receive them
       for (const pluginMeta of plugins) {
         for (const ext of pluginMeta.extensions) {
           extensions.registerExtension(ext);
         }
 
-        // Register proxies if the plugin has any
         if (pluginMeta.proxies && pluginMeta.proxies.length > 0) {
           for (const proxy of pluginMeta.proxies) {
-            // Expand proxy targets based on type
             if (proxy.targetPluginId === 'self') {
-              // Self-proxy: register for the plugin itself
               extensions.registerProxy({
                 targetPluginId: pluginMeta.id,
                 config: proxy.config,
               });
             } else if (proxy.targetPluginId === '*') {
-              // Dependencies proxy: register for all dependencies
               for (const dep of pluginMeta.dependencies) {
                 extensions.registerProxy({
                   targetPluginId: dep.pluginId,
@@ -123,7 +113,6 @@ class LifecycleManagerImpl implements LifecycleManager {
                 });
               }
             } else if (proxy.targetPluginId === '**') {
-              // Global proxy: register for ALL plugins
               for (const targetPlugin of plugins) {
                 extensions.registerProxy({
                   targetPluginId: targetPlugin.id,
@@ -131,7 +120,6 @@ class LifecycleManagerImpl implements LifecycleManager {
                 });
               }
             } else {
-              // Single plugin proxy: register normally
               extensions.registerProxy(proxy);
             }
           }
@@ -197,10 +185,8 @@ class LifecycleManagerImpl implements LifecycleManager {
         },
       };
 
-      // Build plugins with metadata for hooks
       const pluginsWithMetadata = this.buildPluginsWithMetadata(container, plugin.dependencies);
 
-      // Execute onInit hook (before setup) - no API yet
       if (plugin.hooks.onInit) {
         const onInitContext = {
           pluginName,
@@ -209,7 +195,6 @@ class LifecycleManagerImpl implements LifecycleManager {
           plugins: pluginsWithMetadata,
           store: plugin.store,
         };
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await plugin.hooks.onInit(onInitContext as any);
       }
 
@@ -237,7 +222,6 @@ class LifecycleManagerImpl implements LifecycleManager {
 
       registry.setState(createPluginId(pluginName), PluginState.LOADED);
 
-      // Execute onReady hook (after everything is initialized) - API available
       if (plugin.hooks.onReady) {
         const onReadyContext = {
           pluginName,
@@ -247,13 +231,11 @@ class LifecycleManagerImpl implements LifecycleManager {
           store: plugin.store,
           api: finalInstance,
         };
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await plugin.hooks.onReady(onReadyContext as any);
       }
     } catch (error) {
       registry.setState(createPluginId(pluginName), PluginState.ERROR);
 
-      // Execute onError hook if available
       const pluginResult = registry.get(createPluginId(pluginName));
       if (pluginResult.success && pluginResult.data.hooks.onError) {
         const kernelContext: KernelContext = {
@@ -280,10 +262,8 @@ class LifecycleManagerImpl implements LifecycleManager {
         };
 
         try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           await pluginResult.data.hooks.onError(error as Error, onErrorContext as any);
         } catch (hookError) {
-          // If error hook fails, log but continue throwing original error
           console.error(`Error hook failed for plugin ${pluginName}:`, hookError);
         }
       }
@@ -317,7 +297,6 @@ class LifecycleManagerImpl implements LifecycleManager {
               pluginResult.data.dependencies
             );
 
-            // Get current plugin instance for API
             const instanceResult = container.getInstance(pluginName);
             const api = instanceResult.success ? instanceResult.data : undefined;
 
@@ -330,7 +309,6 @@ class LifecycleManagerImpl implements LifecycleManager {
               api,
             };
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             await pluginResult.data.hooks.onShutdown(onShutdownContext as any);
           } catch (error) {
             console.error(`Shutdown hook failed for plugin ${pluginName}:`, error);

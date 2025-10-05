@@ -1,8 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/**
- * @file Kernel builder with fluent API
- * @description Manages plugins and extensions with type-safe
- */
 
 import type { KernelId, KernelConfig } from '@/core';
 import { createKernelId, KernelInitializationError } from '@/core';
@@ -14,7 +10,6 @@ import { setGlobalKernel } from '@/hooks';
 import type { PluginsMap } from '@/utils/types';
 import type { ProxyConfig, ProxyMetadata } from '@/extension/proxy-types';
 
-// Initialized Kernel
 export interface Kernel<TPlugins = Record<string, unknown>> {
   readonly id: KernelId;
   readonly config: KernelConfig;
@@ -22,12 +17,10 @@ export interface Kernel<TPlugins = Record<string, unknown>> {
   shutdown(): Promise<void>;
 }
 
-// Kernel Built (before initialization)
 export interface BuiltKernel<TPlugins> {
   init(): Promise<Kernel<TPlugins>>;
 }
 
-// Builder Kernel
 export interface KernelBuilder<
   U extends BuiltPlugin<string, unknown, unknown, unknown, any> = never,
 > {
@@ -37,8 +30,6 @@ export interface KernelBuilder<
 
   withConfig(config: Partial<KernelConfig>): KernelBuilder<U>;
 
-  // Proxy methods - allows kernel-level proxying
-  // 1. Single plugin proxy: proxy specific plugin
   proxy<
     TTargetName extends string,
     TTargetApi,
@@ -50,7 +41,6 @@ export interface KernelBuilder<
     config: ProxyConfig<TTargetStore>
   ): KernelBuilder<U>;
 
-  // 2. Global proxy: proxy all plugins in kernel
   proxy(target: '**', config: ProxyConfig<any>): KernelBuilder<U>;
 
   build(): BuiltKernel<PluginsMap<U>>;
@@ -58,7 +48,6 @@ export interface KernelBuilder<
   start(): Promise<Kernel<PluginsMap<U>>>;
 }
 
-// Builder Implementation
 class KernelBuilderImpl<
   U extends BuiltPlugin<string, unknown, unknown, unknown, Record<string, any>> = never,
 > implements KernelBuilder<U>
@@ -86,21 +75,17 @@ class KernelBuilderImpl<
     return this as unknown as KernelBuilder<U>;
   }
 
-  // Proxy method - supports single plugin or global proxy
   proxy(targetOrSymbol: any, config?: any): KernelBuilder<U> {
     if (config === undefined) {
-      // Should not happen - proxy() requires 2 arguments
       throw new Error('Kernel proxy requires a target and config');
     }
 
     if (targetOrSymbol === '**') {
-      // Global proxy: proxy all plugins
       this.kernelProxies.push({
         targetPluginId: '**',
         config: config as any,
       });
     } else {
-      // Single plugin proxy
       const target = targetOrSymbol as BuiltPlugin<
         string,
         unknown,
@@ -126,7 +111,6 @@ class KernelBuilderImpl<
   }
 }
 
-// Built Kernel Implementation
 class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, Record<string, any>>>
   implements BuiltKernel<PluginsMap<U>>
 {
@@ -180,7 +164,6 @@ class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, R
   }
 }
 
-// Implementation of initialized kernel
 class KernelImpl<TPlugins> implements Kernel<TPlugins> {
   constructor(
     readonly id: KernelId,
@@ -202,6 +185,19 @@ class KernelImpl<TPlugins> implements Kernel<TPlugins> {
   }
 }
 
+/**
+ * Creates a new kernel for managing plugins.
+ *
+ * @returns A kernel builder for configuring plugins and initialization
+ *
+ * @example
+ * ```typescript
+ * const kernel = await createKernel()
+ *   .use(databasePlugin)
+ *   .use(authPlugin)
+ *   .start();
+ * ```
+ */
 export function createKernel(): KernelBuilder<never> {
   return new KernelBuilderImpl<never>();
 }

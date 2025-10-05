@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @file Extension system for modified plugin APIs
@@ -7,7 +6,7 @@
 
 import type { PluginId, PluginExtension } from '@/core';
 import { createPluginId } from '@/core';
-import type { ProxyMetadata, CompiledMethodProxy, ProxyContext } from './proxy-types';
+import type { ProxyMetadata, CompiledMethodProxy } from './proxy-types';
 import { shouldProxyMethod, enhanceContext } from './proxy-types';
 
 export interface ExtensionManager {
@@ -29,9 +28,7 @@ class ExtensionManagerImpl implements ExtensionManager {
     this.extensions.set(targetName, [...existing, extension]);
   }
 
-  // Register proxy
   registerProxy(proxy: ProxyMetadata): void {
-    // After expansion in lifecycle, targetPluginId is always a concrete PluginId
     const targetName = proxy.targetPluginId as PluginId;
     const existing = this.proxies.get(targetName) ?? [];
     this.proxies.set(targetName, [...existing, proxy]);
@@ -51,7 +48,6 @@ class ExtensionManagerImpl implements ExtensionManager {
 
     let extendedApi: TApi = { ...baseApi };
 
-    // Apply traditional extensions first
     for (const extension of extensions) {
       try {
         const extensionResult = extension.extensionFn(extendedApi);
@@ -68,7 +64,6 @@ class ExtensionManagerImpl implements ExtensionManager {
       }
     }
 
-    // Apply proxies
     if (proxies.length > 0) {
       extendedApi = this.applyProxies(pluginName, extendedApi, proxies, store);
     }
@@ -76,7 +71,6 @@ class ExtensionManagerImpl implements ExtensionManager {
     return extendedApi;
   }
 
-  // Apply proxies to a plugin API
   private applyProxies<TApi extends object>(
     pluginName: string,
     api: TApi,
@@ -84,23 +78,18 @@ class ExtensionManagerImpl implements ExtensionManager {
     store: unknown
   ): TApi {
     const proxiedApi = { ...api } as Record<string, unknown>;
-
-    // Compile proxies into method-specific proxies
     const compiledProxies = this.compileProxies(api, proxies);
-
-    // Group by method and sort by priority
     const proxiesByMethod = new Map<string, CompiledMethodProxy[]>();
+
     for (const proxy of compiledProxies) {
       const existing = proxiesByMethod.get(proxy.methodName) ?? [];
       proxiesByMethod.set(proxy.methodName, [...existing, proxy]);
     }
 
-    // Sort each group by priority (higher first)
-    for (const [methodName, methodProxies] of proxiesByMethod) {
+    for (const [, methodProxies] of proxiesByMethod) {
       methodProxies.sort((a, b) => b.priority - a.priority);
     }
 
-    // Apply proxies to each method
     for (const [methodName, methodProxies] of proxiesByMethod) {
       const originalMethod = proxiedApi[methodName];
 
@@ -118,7 +107,6 @@ class ExtensionManagerImpl implements ExtensionManager {
     return proxiedApi as TApi;
   }
 
-  // Compile proxy metadata into method-specific compiled proxies
   private compileProxies<TApi extends object>(
     api: TApi,
     proxies: readonly ProxyMetadata[]
@@ -128,12 +116,10 @@ class ExtensionManagerImpl implements ExtensionManager {
     for (const proxyMeta of proxies) {
       const config = proxyMeta.config;
 
-      // Get all method names from the API
       const allMethodNames = Object.keys(api).filter(
         key => typeof (api as any)[key] === 'function'
       );
 
-      // Determine which methods should be proxied
       const targetMethods = allMethodNames.filter(methodName =>
         shouldProxyMethod(methodName, {
           include: config.include,
@@ -141,10 +127,9 @@ class ExtensionManagerImpl implements ExtensionManager {
         })
       );
 
-      // Create compiled proxy for each target method
       for (const methodName of targetMethods) {
         compiled.push({
-          targetPluginId: proxyMeta.targetPluginId as PluginId, // After expansion, always PluginId
+          targetPluginId: proxyMeta.targetPluginId as PluginId,
           methodName,
           before: config.before,
           after: config.after,
@@ -160,7 +145,6 @@ class ExtensionManagerImpl implements ExtensionManager {
     return compiled;
   }
 
-  // Create proxied method with all interceptors
   private createProxiedMethod(
     pluginName: string,
     methodName: string,
@@ -168,9 +152,7 @@ class ExtensionManagerImpl implements ExtensionManager {
     proxies: readonly CompiledMethodProxy[],
     store: unknown
   ): (...args: unknown[]) => unknown {
-    // Always use async version for proxies (simpler and more flexible)
     return async (...args: unknown[]) => {
-      // Create proxy context with store
       const baseContext = {
         plugin: pluginName,
         method: methodName,
@@ -178,13 +160,10 @@ class ExtensionManagerImpl implements ExtensionManager {
         store,
       };
 
-      // Enhance context with helper methods
       const enhancedContext = enhanceContext(baseContext as any);
 
       try {
-        // Execute BEFORE interceptors
         for (const proxy of proxies) {
-          // Check condition
           if (proxy.condition && !proxy.condition(enhancedContext)) {
             continue;
           }
@@ -192,17 +171,13 @@ class ExtensionManagerImpl implements ExtensionManager {
           if (proxy.before) {
             await proxy.before(enhancedContext);
 
-            // Check if execution was skipped
             if (enhancedContext._skipExecution) {
               return enhancedContext._overrideResult;
             }
           }
         }
 
-        // Update args if modified
         const finalArgs = enhancedContext._modifiedArgs ?? enhancedContext.args;
-
-        // Execute AROUND interceptors (only first one)
         const aroundProxy = proxies.find(
           p => p.around && (!p.condition || p.condition(enhancedContext))
         );
@@ -210,18 +185,14 @@ class ExtensionManagerImpl implements ExtensionManager {
         let result: unknown;
 
         if (aroundProxy) {
-          // Execute around interceptor
           result = await aroundProxy.around!(enhancedContext, async () => {
             return await originalMethod(...finalArgs);
           });
         } else {
-          // Execute original method
           result = await originalMethod(...finalArgs);
         }
 
-        // Execute AFTER interceptors
         for (const proxy of proxies) {
-          // Check condition
           if (proxy.condition && !proxy.condition(enhancedContext)) {
             continue;
           }
@@ -233,9 +204,7 @@ class ExtensionManagerImpl implements ExtensionManager {
 
         return result;
       } catch (error) {
-        // Execute ERROR interceptors
         for (const proxy of proxies) {
-          // Check condition
           if (proxy.condition && !proxy.condition(enhancedContext)) {
             continue;
           }
@@ -245,7 +214,6 @@ class ExtensionManagerImpl implements ExtensionManager {
           }
         }
 
-        // If no error handler, re-throw
         throw error;
       }
     };

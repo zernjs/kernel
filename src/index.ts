@@ -1,9 +1,3 @@
-/**
- * Exports públicos do Zern Kernel
- * API limpa e organizada para consumidores
- */
-
-// Core exports
 export type {
   PluginId,
   KernelId,
@@ -40,7 +34,6 @@ export {
   VersionMismatchError,
 } from '@/core';
 
-// Plugin exports
 export type { PluginSetupContext, BuiltPlugin, PluginBuilder } from '@/plugin';
 export { plugin } from '@/plugin';
 
@@ -50,7 +43,6 @@ export { createPluginRegistry } from '@/plugin';
 export type { DependencyResolver } from '@/plugin';
 export { createDependencyResolver } from '@/plugin';
 
-// Kernel exports
 export type { Kernel, BuiltKernel, KernelBuilder } from '@/kernel';
 export { createKernel } from '@/kernel';
 
@@ -60,15 +52,12 @@ export { createPluginContainer } from '@/kernel';
 export type { LifecycleManager } from '@/kernel';
 export { createLifecycleManager } from '@/kernel';
 
-// Hooks exports
 export { createDirectMethod, getGlobalKernel, setGlobalKernel } from '@/hooks';
 export { createDirectExports } from '@/hooks';
 
-// Extension exports
 export type { ExtensionManager } from '@/extension';
 export { createExtensionManager } from '@/extension';
 
-// Store exports
 export type {
   Store,
   StoreOptions,
@@ -81,7 +70,6 @@ export type {
 } from '@/store';
 export { createStore, isStore } from '@/store';
 
-// Utility exports
 export type { SemanticVersion } from '@/utils';
 export { parseVersion, compareVersions, satisfiesVersion, isValidVersionRange } from '@/utils';
 
@@ -104,7 +92,6 @@ export {
   isResult,
 } from '@/utils';
 
-// API Helper exports
 export {
   bindMethods,
   combineImplementations,
@@ -114,5 +101,4 @@ export {
   pickMethods,
 } from '@/utils';
 
-// Convenience exports
 export { createPluginId, createKernelId, createVersion } from './core/types.js';

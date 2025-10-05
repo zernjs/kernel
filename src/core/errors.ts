@@ -15,7 +15,6 @@ export abstract class ZernError extends Error {
   }
 }
 
-// Plugin errors
 export class PluginError extends ZernError {
   readonly code: string = 'PLUGIN_ERROR';
 }
@@ -44,7 +43,6 @@ export class PluginDependencyError extends PluginError {
   }
 }
 
-// Kernel errors
 export class KernelError extends ZernError {
   readonly code: string = 'KERNEL_ERROR';
 }
@@ -65,7 +63,6 @@ export class CircularDependencyError extends KernelError {
   }
 }
 
-// Versioning errors
 export class VersionError extends ZernError {
   readonly code: string = 'VERSION_ERROR';
 }

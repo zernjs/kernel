@@ -10,14 +10,12 @@ export type PluginId = string & { readonly __brand: 'PluginId' };
 export type KernelId = string & { readonly __brand: 'KernelId' };
 export type Version = string & { readonly __brand: 'Version' };
 
-// Kernel context available for plugins
 export interface KernelContext {
   readonly id: KernelId;
   readonly config: KernelConfig;
   readonly get: <T>(pluginId: string) => T;
 }
 
-// Kernel configuration options
 export interface KernelConfig {
   readonly autoGlobal?: boolean;
   readonly strictVersioning?: boolean;
@@ -27,7 +25,6 @@ export interface KernelConfig {
   readonly logLevel?: 'debug' | 'info' | 'warn' | 'error';
 }
 
-// Plugin states
 export enum PluginState {
   UNLOADED = 'UNLOADED',
   LOADING = 'LOADING',
@@ -35,7 +32,6 @@ export enum PluginState {
   ERROR = 'ERROR',
 }
 
-// Plugin Metadata
 export interface PluginMetadata {
   readonly id: PluginId;
   readonly name: string;
@@ -44,22 +40,19 @@ export interface PluginMetadata {
   readonly dependencies: readonly PluginDependency[];
   readonly extensions: readonly PluginExtension[];
 
-  readonly proxies: readonly any[]; // ProxyMetadata[] - using any to avoid circular dependency
+  readonly proxies: readonly any[];
 }
 
-// Plugin dependency
 export interface PluginDependency {
   readonly pluginId: PluginId;
   readonly versionRange: string;
 }
 
-// Plugin extension
 export interface PluginExtension {
   readonly targetPluginId: PluginId;
   readonly extensionFn: (api: unknown) => unknown;
 }
 
-// Lifecycle hook context
 export interface LifecycleHookContext<
   TDepsWithMeta = Record<string, unknown>,
   TStore extends Record<string, any> = Record<string, never>,
@@ -70,10 +63,9 @@ export interface LifecycleHookContext<
   readonly kernel: KernelContext;
   readonly plugins: TDepsWithMeta;
   readonly store: Store<TStore>;
-  readonly api?: TApi; // Available only in onReady and onShutdown
+  readonly api?: TApi;
 }
 
-// Lifecycle hooks
 export type LifecycleHook<
   TDeps = Record<string, unknown>,
   TStore extends Record<string, any> = Record<string, never>,
@@ -85,16 +77,15 @@ export interface PluginLifecycleHooks<
   TStore extends Record<string, any> = Record<string, never>,
   TApi = unknown,
 > {
-  readonly onInit?: LifecycleHook<TDeps, TStore, never>; // onInit: no API yet
-  readonly onReady?: LifecycleHook<TDeps, TStore, TApi>; // onReady: API available
-  readonly onShutdown?: LifecycleHook<TDeps, TStore, TApi>; // onShutdown: API available
+  readonly onInit?: LifecycleHook<TDeps, TStore, never>;
+  readonly onReady?: LifecycleHook<TDeps, TStore, TApi>;
+  readonly onShutdown?: LifecycleHook<TDeps, TStore, TApi>;
   readonly onError?: (
     error: Error,
     context: LifecycleHookContext<TDeps, TStore, never>
-  ) => void | Promise<void>; // onError: no API
+  ) => void | Promise<void>;
 }
 
-// Created branded type helpers
 export function createPluginId(value: string): PluginId {
   return value as PluginId;
 }

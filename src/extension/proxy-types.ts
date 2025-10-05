@@ -16,20 +16,16 @@ import type { PluginId } from '@/core';
  * TStore: Type for ctx.store - shared state between lifecycle/setup/proxy
  */
 export interface ProxyContext<TMethod extends (...args: any[]) => any, TStore = any> {
-  // Method information
   readonly plugin: string;
   readonly method: string;
   readonly args: Parameters<TMethod>;
 
-  // Execution control (internal flags)
   _skipExecution?: boolean;
   _overrideResult?: Awaited<ReturnType<TMethod>>;
   _modifiedArgs?: Parameters<TMethod>;
 
-  // Shared store (type-safe, mutable, shared across lifecycle/setup/proxy)
   readonly store: TStore;
 
-  // Helper methods for controlling execution
   skip: () => void;
   replace: (result: Awaited<ReturnType<TMethod>>) => void;
   modifyArgs: (...args: Parameters<TMethod>) => void;
@@ -88,17 +84,14 @@ export type MethodPattern = string | RegExp;
  * Store is accessible via ctx.store in all interceptors
  */
 export interface ProxyConfig<TStore = any> {
-  // Method filtering (glob patterns or regex)
   include?: MethodPattern[];
   exclude?: MethodPattern[];
 
-  // Interceptors (with access to typed store via ctx.store)
   before?: ProxyBefore<any, TStore>;
   after?: ProxyAfter<any, TStore>;
   onError?: ProxyError<any, TStore>;
   around?: ProxyAround<any, TStore>;
 
-  // Advanced options
   priority?: number;
   condition?: (ctx: ProxyContext<any, TStore>) => boolean;
   group?: string;
@@ -159,10 +152,7 @@ export function matchesPattern(methodName: string, pattern: MethodPattern): bool
     return pattern.test(methodName);
   }
 
-  // Convert glob pattern to regex
-  const regexPattern = pattern
-    .replace(/[.+?^${}()|[\]\\]/g, '\\$&') // Escape special chars
-    .replace(/\*/g, '.*'); // Convert * to .*
+  const regexPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
 
   const regex = new RegExp(`^${regexPattern}$`);
   return regex.test(methodName);
@@ -172,7 +162,6 @@ export function matchesPattern(methodName: string, pattern: MethodPattern): bool
  * Check if a method should be proxied based on config
  */
 export function shouldProxyMethod(methodName: string, config: ProxyConfig): boolean {
-  // Check include patterns (if specified, method must match)
   if (config.include && config.include.length > 0) {
     const included = config.include.some((pattern: MethodPattern) =>
       matchesPattern(methodName, pattern)
@@ -180,7 +169,6 @@ export function shouldProxyMethod(methodName: string, config: ProxyConfig): bool
     if (!included) return false;
   }
 
-  // Check exclude patterns (if method matches, exclude it)
   if (config.exclude && config.exclude.length > 0) {
     const excluded = config.exclude.some((pattern: MethodPattern) =>
       matchesPattern(methodName, pattern)
@@ -188,7 +176,6 @@ export function shouldProxyMethod(methodName: string, config: ProxyConfig): bool
     if (excluded) return false;
   }
 
-  // If no selectors specified, proxy all methods by default
   return true;
 }
 
@@ -229,7 +216,6 @@ export function enhanceContext<
   TMethod extends (...args: any[]) => any,
   TStore = Record<string, never>,
 >(ctx: ProxyContext<TMethod, TStore>): ProxyContext<TMethod, TStore> {
-  // Add helper methods
   (ctx as any).skip = (): void => skipExecution(ctx);
   (ctx as any).replace = (result: Awaited<ReturnType<TMethod>>): void => replaceResult(ctx, result);
   (ctx as any).modifyArgs = (...args: Parameters<TMethod>): void => modifyArgs(ctx, ...args);

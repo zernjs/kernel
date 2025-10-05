@@ -47,7 +47,6 @@ export function createDirectExports<
   const exports: Record<string, any> = {};
 
   for (const methodName of Object.keys(methodSignatures)) {
-    // Create a wrapper that resolves the method via the global kernel
     exports[methodName] = (...args: any[]): any => {
       const kernel = getGlobalKernel();
       const plugin = kernel.get(pluginName);
