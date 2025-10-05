@@ -347,19 +347,20 @@ console.log(multiply(4, 5)); // ✅ Autocomplete works!
 
 Comprehensive documentation is available in the [`docs/`](./docs/) directory:
 
-| Document                                                        | Description                          |
-| --------------------------------------------------------------- | ------------------------------------ |
-| [**Architecture Overview**](./docs/01-architecture-overview.md) | System design and layer architecture |
-| [**Getting Started**](./docs/02-getting-started.md)             | Installation and first steps         |
-| [**Plugin System**](./docs/03-plugin-system.md)                 | Creating and managing plugins        |
-| [**Kernel Layer**](./docs/04-kernel-layer.md)                   | Kernel initialization and lifecycle  |
-| [**Extension System**](./docs/05-extension-system.md)           | Extending plugin APIs                |
-| [**Direct Exports**](./docs/06-direct-exports.md)               | Library-like method exports          |
-| [**Lifecycle Hooks**](./docs/07-lifecycle-hooks.md)             | Plugin lifecycle management          |
-| [**Metadata System**](./docs/08-metadata-system.md)             | Custom metadata with type safety     |
-| [**API Reference**](./docs/09-api-reference.md)                 | Complete API documentation           |
-| [**Best Practices**](./docs/10-best-practices.md)               | Patterns and guidelines              |
-| [**Proxy System**](./docs/12-proxy-system.md)                   | Method interception and proxying     |
+| Document                                                        | Description                                   |
+| --------------------------------------------------------------- | --------------------------------------------- |
+| [**Architecture Overview**](./docs/01-architecture-overview.md) | System design and layer architecture          |
+| [**Getting Started**](./docs/02-getting-started.md)             | Installation and first steps                  |
+| [**Plugin System**](./docs/03-plugin-system.md)                 | Creating and managing plugins                 |
+| [**Kernel Layer**](./docs/04-kernel-layer.md)                   | Kernel initialization and lifecycle           |
+| [**Extension System**](./docs/05-extension-system.md)           | Extending plugin APIs                         |
+| [**Direct Exports**](./docs/06-direct-exports.md)               | Library-like method exports                   |
+| [**Lifecycle Hooks**](./docs/07-lifecycle-hooks.md)             | Plugin lifecycle management                   |
+| [**Metadata System**](./docs/08-metadata-system.md)             | Custom metadata with type safety              |
+| [**API Reference**](./docs/09-api-reference.md)                 | Complete API documentation                    |
+| [**Best Practices**](./docs/10-best-practices.md)               | Patterns and guidelines                       |
+| [**Proxy System**](./docs/12-proxy-system.md)                   | Method interception and proxying              |
+| [**Store System**](./docs/13-store-system.md)                   | Reactive state management and change tracking |
 
 ---
 
@@ -369,6 +370,8 @@ Explore complete examples in the [`examples/`](./examples/) directory:
 
 - [**Basic Usage**](./examples/basic-usage.ts) - Plugin creation, dependencies, and kernel initialization
 - [**Direct Usage**](./examples/direct-usage.ts) - Direct method exports and library-like usage
+- [**Store Demo**](./examples/store-demo.ts) - Comprehensive reactive store features
+- [**Store Example**](./examples/store-example.ts) - Store usage with lifecycle hooks
 - [**Proxy Demo**](./examples/proxy-demo.ts) - Method interception with multiple proxies
 - [**Proxy Complete Demo**](./examples/proxy-complete-demo.ts) - All 4 proxy modes in action
 - [**Kernel Proxy Demo**](./examples/kernel-proxy-demo.ts) - Kernel-level proxy examples
