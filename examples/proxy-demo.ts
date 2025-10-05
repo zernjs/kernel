@@ -45,21 +45,25 @@ const apiPlugin = plugin('api', '1.0.0').setup(
 // ============================================================================
 
 const timingPlugin = plugin('timing', '1.0.0')
+  .store(() => new Map<string, number>()) // Store to track start times
   .depends(apiPlugin, '^1.0.0') // ✅ Required for proxy!
-  .proxy(apiPlugin, ctx => ({
-    // ✨ Factory function - ctx é compartilhado entre todos os interceptors!
-    // TypeScript infere automaticamente que ctx.data pode ter qualquer propriedade!
-    before: (): void => {
-      ctx.data.startTime = Date.now();
+  .proxy(apiPlugin, {
+    before: ctx => {
+      const key = `${ctx.plugin}.${ctx.method}`;
+      ctx.store.set(key, Date.now());
       console.log(`⏱️  [TIMING] Starting ${ctx.method}...`);
     },
-    after: (result): unknown => {
-      // ✨ ctx.data.startTime está disponível em runtime (tipo é 'any' mas funciona!)
-      const duration = Date.now() - (ctx.data.startTime as number);
-      console.log(`⏱️  [TIMING] ${ctx.method} took ${duration}ms`);
+    after: (result, ctx) => {
+      const key = `${ctx.plugin}.${ctx.method}`;
+      const startTime = ctx.store.get(key);
+      if (startTime) {
+        const duration = Date.now() - startTime;
+        console.log(`⏱️  [TIMING] ${ctx.method} took ${duration}ms`);
+        ctx.store.delete(key);
+      }
       return result;
     },
-  }))
+  })
   .setup(() => ({}));
 
 // ============================================================================

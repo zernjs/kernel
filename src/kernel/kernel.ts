@@ -44,7 +44,7 @@ export interface KernelBuilder<
     TTargetApi,
     TTargetExtMap = unknown,
     TTargetMetadata = unknown,
-    TTargetStore = any,
+    TTargetStore extends Record<string, any> = Record<string, any>,
   >(
     target: BuiltPlugin<TTargetName, TTargetApi, TTargetExtMap, TTargetMetadata, TTargetStore>,
     config: ProxyConfig<TTargetStore>
@@ -59,10 +59,11 @@ export interface KernelBuilder<
 }
 
 // Builder Implementation
-class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, unknown> = never>
-  implements KernelBuilder<U>
+class KernelBuilderImpl<
+  U extends BuiltPlugin<string, unknown, unknown, unknown, Record<string, any>> = never,
+> implements KernelBuilder<U>
 {
-  private plugins: BuiltPlugin<string, unknown, unknown, unknown, unknown>[] = [];
+  private plugins: BuiltPlugin<string, unknown, unknown, unknown, Record<string, any>>[] = [];
   private kernelProxies: ProxyMetadata[] = [];
   private config: KernelConfig = {
     autoGlobal: true,
@@ -100,7 +101,13 @@ class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown, unknown,
       });
     } else {
       // Single plugin proxy
-      const target = targetOrSymbol as BuiltPlugin<string, unknown, unknown, unknown, unknown>;
+      const target = targetOrSymbol as BuiltPlugin<
+        string,
+        unknown,
+        unknown,
+        unknown,
+        Record<string, any>
+      >;
       this.kernelProxies.push({
         targetPluginId: target.id,
         config: config as any,
@@ -120,11 +127,17 @@ class KernelBuilderImpl<U extends BuiltPlugin<string, unknown, unknown, unknown,
 }
 
 // Built Kernel Implementation
-class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, unknown>>
+class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, Record<string, any>>>
   implements BuiltKernel<PluginsMap<U>>
 {
   constructor(
-    private readonly plugins: readonly BuiltPlugin<string, unknown, unknown, unknown, unknown>[],
+    private readonly plugins: readonly BuiltPlugin<
+      string,
+      unknown,
+      unknown,
+      unknown,
+      Record<string, any>
+    >[],
     private readonly kernelProxies: readonly ProxyMetadata[],
     private readonly config: KernelConfig
   ) {}

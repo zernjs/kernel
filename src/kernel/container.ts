@@ -9,7 +9,13 @@ import { success, failure, PluginNotFoundError, PluginLoadError } from '@/core';
 import { createPluginRegistry } from '@/plugin';
 
 export interface PluginContainer {
-  register<TName extends string, TApi, TExt = unknown, TMetadata = unknown, TStore = unknown>(
+  register<
+    TName extends string,
+    TApi,
+    TExt = unknown,
+    TMetadata = unknown,
+    TStore extends Record<string, any> = Record<string, any>,
+  >(
     plugin: BuiltPlugin<TName, TApi, TExt, TMetadata, TStore>
   ): Result<void, PluginLoadError>;
 
@@ -30,9 +36,13 @@ class PluginContainerImpl implements PluginContainer {
     this.registry = createPluginRegistry();
   }
 
-  register<TName extends string, TApi, TExt = unknown, TMetadata = unknown, TStore = unknown>(
-    plugin: BuiltPlugin<TName, TApi, TExt, TMetadata, TStore>
-  ): Result<void, PluginLoadError> {
+  register<
+    TName extends string,
+    TApi,
+    TExt = unknown,
+    TMetadata = unknown,
+    TStore extends Record<string, any> = Record<string, any>,
+  >(plugin: BuiltPlugin<TName, TApi, TExt, TMetadata, TStore>): Result<void, PluginLoadError> {
     return this.registry.register(plugin);
   }
 
