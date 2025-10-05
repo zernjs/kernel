@@ -2,6 +2,8 @@
  * @description Fundamental types for the Zern Kernel, like Branded types for type safety
  */
 
+import type { Store } from '@/store';
+
 // Branded types for unique IDs
 export type PluginId = string & { readonly __brand: 'PluginId' };
 export type KernelId = string & { readonly __brand: 'KernelId' };
@@ -59,27 +61,27 @@ export interface PluginExtension {
 // Lifecycle hook context
 export interface LifecycleHookContext<
   TDepsWithMeta = Record<string, unknown>,
-  TStore = Record<string, never>,
+  TStore extends Record<string, any> = Record<string, never>,
   TApi = unknown,
 > {
   readonly pluginName: string;
   readonly pluginId: PluginId;
   readonly kernel: KernelContext;
   readonly plugins: TDepsWithMeta;
-  readonly store: TStore;
+  readonly store: Store<TStore>;
   readonly api?: TApi; // Available only in onReady and onShutdown
 }
 
 // Lifecycle hooks
 export type LifecycleHook<
   TDeps = Record<string, unknown>,
-  TStore = Record<string, never>,
+  TStore extends Record<string, any> = Record<string, never>,
   TApi = unknown,
 > = (context: LifecycleHookContext<TDeps, TStore, TApi>) => void | Promise<void>;
 
 export interface PluginLifecycleHooks<
   TDeps = Record<string, unknown>,
-  TStore = Record<string, never>,
+  TStore extends Record<string, any> = Record<string, never>,
   TApi = unknown,
 > {
   readonly onInit?: LifecycleHook<TDeps, TStore, never>; // onInit: no API yet

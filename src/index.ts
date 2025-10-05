@@ -68,6 +68,19 @@ export { createDirectExports } from '@/hooks';
 export type { ExtensionManager } from '@/extension';
 export { createExtensionManager } from '@/extension';
 
+// Store exports
+export type {
+  Store,
+  StoreOptions,
+  StoreChange,
+  WatchCallback,
+  WatchAllCallback,
+  WatchBatchCallback,
+  ComputedValue,
+  ComputedSelector,
+} from '@/store';
+export { createStore, isStore } from '@/store';
+
 // Utility exports
 export type { SemanticVersion } from '@/utils';
 export { parseVersion, compareVersions, satisfiesVersion, isValidVersionRange } from '@/utils';

@@ -15,12 +15,17 @@ import type {
 import { createPluginId, createVersion } from '@/core';
 import type { DepsWithMetadata } from '@/utils/types';
 import type { ProxyConfig, ProxyMetadata, ProxyTarget } from '@/extension/proxy-types';
+import { createStore, isStore } from '@/store';
+import type { Store } from '@/store';
 
 // Context available in plugin setup function
-export interface PluginSetupContext<TDeps = Record<string, never>, TStore = Record<string, never>> {
+export interface PluginSetupContext<
+  TDeps = Record<string, never>,
+  TStore extends Record<string, any> = Record<string, never>,
+> {
   readonly plugins: TDeps;
   readonly kernel: KernelContext;
-  readonly store: TStore;
+  readonly store: Store<TStore>;
 }
 
 // Plugin builted, result of the setup function
@@ -29,7 +34,7 @@ export interface BuiltPlugin<
   TApi,
   TExtMap = Record<string, never>,
   TMetadata = Record<string, unknown>,
-  TStore = Record<string, never>,
+  TStore extends Record<string, any> = Record<string, never>,
 > {
   readonly id: PluginId;
   readonly name: TName;
@@ -39,7 +44,7 @@ export interface BuiltPlugin<
   readonly proxies: readonly ProxyMetadata[];
   readonly hooks: PluginLifecycleHooks;
   readonly metadata: TMetadata;
-  readonly store: TStore;
+  readonly store: Store<TStore>;
   readonly setupFn: (ctx: PluginSetupContext<Record<string, unknown>, TStore>) => TApi;
   // Phantom type to carry compile-time extension info
   readonly __extensions__?: TExtMap | undefined;
@@ -69,10 +74,10 @@ export interface PluginBuilder<
   TDeps = Record<string, never>,
   TExtMap = Record<string, never>,
   TMetadata = Record<string, unknown>,
-  TStore = Record<string, never>,
+  TStore extends Record<string, any> = Record<string, never>,
 > {
   // Define shared store with automatic type inference
-  store<TNewStore>(
+  store<TNewStore extends Record<string, any>>(
     factory: () => TNewStore
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TNewStore>;
 
@@ -89,7 +94,7 @@ export interface PluginBuilder<
     TDepApi,
     TDepExtMap = unknown,
     TDepMetadata = unknown,
-    TDepStore = any,
+    TDepStore extends Record<string, any> = any,
   >(
     plugin: BuiltPlugin<TDepName, TDepApi, TDepExtMap, TDepMetadata, TDepStore>,
     versionRange?: string
@@ -107,7 +112,7 @@ export interface PluginBuilder<
     TTargetApi,
     TTargetExtMap = unknown,
     TTargetMetadata = unknown,
-    TTargetStore = any,
+    TTargetStore extends Record<string, any> = any,
     TExt extends object = object,
   >(
     target: BuiltPlugin<TTargetName, TTargetApi, TTargetExtMap, TTargetMetadata, TTargetStore>,
@@ -126,7 +131,7 @@ export interface PluginBuilder<
     TTargetApi,
     TTargetExtMap = unknown,
     TTargetMetadata = unknown,
-    TTargetStore = any,
+    TTargetStore extends Record<string, any> = any,
   >(
     target: BuiltPlugin<TTargetName, TTargetApi, TTargetExtMap, TTargetMetadata, TTargetStore>,
     config: ProxyConfig<TStore>
@@ -166,7 +171,7 @@ class PluginBuilderImpl<
   TDeps = Record<string, never>,
   TExtMap = Record<string, never>,
   TMetadata = Record<string, unknown>,
-  TStore = Record<string, never>,
+  TStore extends Record<string, any> = Record<string, never>,
 > implements PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>
 {
   private dependencies: PluginDependency[] = [];
@@ -174,17 +179,23 @@ class PluginBuilderImpl<
   private proxies: ProxyMetadata[] = [];
   private hooks: PluginLifecycleHooks<TDeps, TStore> = {};
   private pluginMetadata: TMetadata = {} as TMetadata;
-  private pluginStore: TStore = {} as TStore;
+  private pluginStore: Store<TStore> = createStore({} as TStore);
 
   constructor(
     private readonly name: TName,
     private readonly version: Version
   ) {}
 
-  store<TNewStore>(
+  store<TNewStore extends Record<string, any>>(
     factory: () => TNewStore
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TNewStore> {
-    this.pluginStore = factory() as unknown as TStore;
+    const rawStore = factory();
+
+    // Make store reactive if it's not already
+    this.pluginStore = (isStore(rawStore)
+      ? rawStore
+      : createStore(rawStore)) as unknown as Store<TStore>;
+
     return this as unknown as PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TNewStore>;
   }
 
@@ -200,7 +211,7 @@ class PluginBuilderImpl<
     TDepApi,
     TDepExtMap = unknown,
     TDepMetadata = unknown,
-    TDepStore = any,
+    TDepStore extends Record<string, any> = any,
   >(
     plugin: BuiltPlugin<TDepName, TDepApi, TDepExtMap, TDepMetadata, TDepStore>,
     versionRange = '*'
@@ -232,7 +243,7 @@ class PluginBuilderImpl<
     TTargetApi,
     TTargetExtMap = unknown,
     TTargetMetadata = unknown,
-    TTargetStore = any,
+    TTargetStore extends Record<string, any> = any,
     TExt extends object = object,
   >(
     target: BuiltPlugin<TTargetName, TTargetApi, TTargetExtMap, TTargetMetadata, TTargetStore>,
@@ -275,7 +286,7 @@ class PluginBuilderImpl<
       config = configOrUndefined;
     } else {
       // Case 2: Single plugin proxy - .proxy(plugin, { ... })
-      const target = targetOrConfig as BuiltPlugin<string, unknown, unknown, unknown, unknown>;
+      const target = targetOrConfig as BuiltPlugin<string, any, any, any, any>;
 
       // ✅ Validate that target is in dependencies
       const hasDependency = this.dependencies.some(dep => dep.pluginId === target.id);
@@ -359,7 +370,7 @@ class BuiltPluginImpl<
   TApi,
   TExtMap = Record<string, never>,
   TMetadata = Record<string, unknown>,
-  TStore = Record<string, never>,
+  TStore extends Record<string, any> = Record<string, never>,
 > implements BuiltPlugin<TName, TApi, TExtMap, TMetadata, TStore>
 {
   readonly id: PluginId;
@@ -373,7 +384,7 @@ class BuiltPluginImpl<
     readonly proxies: readonly ProxyMetadata[],
     readonly hooks: PluginLifecycleHooks,
     readonly metadata: TMetadata,
-    readonly store: TStore
+    readonly store: Store<TStore>
   ) {
     this.id = createPluginId(name);
   }
