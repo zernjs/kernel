@@ -266,7 +266,7 @@ export function createStore<TStore extends Record<string, any>>(
               w => !(w.type === 'key' && w.key === key && w.callback === callback)
             );
           } else {
-            state.watchers = state.watchers.filter(!(w.type === 'key' && w.key === key));
+            state.watchers = state.watchers.filter(w => !(w.type === 'key' && w.key === key));
           }
         };
       }
