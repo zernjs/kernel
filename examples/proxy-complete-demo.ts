@@ -22,7 +22,7 @@ const mathPlugin = plugin('math', '1.0.0')
   }))
   // ✅ CASE 1: Self-proxy - proxy own methods
   .proxy({
-    methods: 'add',
+    include: ['add'],
     before: ctx => {
       console.log(`  ✨ [SELF-PROXY] Intercepting my own method: ${ctx.method}`);
     },
@@ -57,7 +57,7 @@ const loggingPlugin = plugin('logging', '1.0.0')
   .depends(mathPlugin, '^1.0.0') // ✅ Required!
   .proxy(mathPlugin, {
     // ✅ CASE 2: Proxy specific plugin (must be in depends)
-    methods: 'multiply',
+    include: ['multiply'],
     before: ctx => {
       console.log(`  📋 [LOGGING] Proxying ${ctx.plugin}.${ctx.method}`);
     },
@@ -72,24 +72,30 @@ const loggingPlugin = plugin('logging', '1.0.0')
 // CASE 3: Dependencies Proxy
 // ============================================================================
 
+// For timing other plugins, use external Map (ctx.store refers to target plugin's store)
+const timingMap = new Map<string, number>();
+
 const timingPlugin = plugin('timing', '1.0.0')
   .depends(mathPlugin, '^1.0.0')
   .depends(apiPlugin, '^1.0.0')
-  .proxy('*', ctx => {
+  .proxy('*', {
     // ✅ CASE 3: Proxy ALL dependencies (math + api)
-    let startTime: number;
-
-    return {
-      before: (): void => {
-        startTime = Date.now();
-        console.log(`  ⏱️  [TIMING] Started ${ctx.plugin}.${ctx.method}`);
-      },
-      after: (result): unknown => {
+    // Note: ctx.store is the target plugin's store, not timing plugin's
+    before: (ctx): void => {
+      const key = `${ctx.plugin}.${ctx.method}`;
+      timingMap.set(key, Date.now());
+      console.log(`  ⏱️  [TIMING] Started ${key}`);
+    },
+    after: (result, ctx): unknown => {
+      const key = `${ctx.plugin}.${ctx.method}`;
+      const startTime = timingMap.get(key);
+      if (startTime) {
         const duration = Date.now() - startTime;
-        console.log(`  ⏱️  [TIMING] ${ctx.plugin}.${ctx.method} took ${duration}ms`);
-        return result;
-      },
-    };
+        console.log(`  ⏱️  [TIMING] ${key} took ${duration}ms`);
+        timingMap.delete(key);
+      }
+      return result;
+    },
   })
   .setup(() => ({}));
 

@@ -1,0 +1,19 @@
+{
+  "name": "minimal-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Minimal Zern Kernel application boilerplate",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts"
+  },
+  "dependencies": {
+    "@zern/kernel": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.4",
+    "typescript": "^5.7.3"
+  }
+}

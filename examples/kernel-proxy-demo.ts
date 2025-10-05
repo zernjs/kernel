@@ -127,25 +127,31 @@ async function main(): Promise<void> {
   console.log('TEST 3: Multiple Proxies (specific + global)');
   console.log('─'.repeat(60));
 
+  // Simple timing map for kernel-level proxy
+  const timings = new Map<string, number>();
+
   const kernel3 = await createKernel()
     .use(mathPlugin)
     .use(apiPlugin)
     .use(dbPlugin)
-    // ✅ Global timing proxy
-    .proxy('**', ctx => {
-      let startTime: number;
-      return {
-        priority: 50,
-        before: (): void => {
-          startTime = Date.now();
-          console.log(`  ⏱️  [TIMING] Started ${ctx.plugin}.${ctx.method}`);
-        },
-        after: (result): unknown => {
+    // ✅ Global timing proxy (uses external Map)
+    .proxy('**', {
+      priority: 50,
+      before: (ctx): void => {
+        const key = `${ctx.plugin}.${ctx.method}`;
+        timings.set(key, Date.now());
+        console.log(`  ⏱️  [TIMING] Started ${key}`);
+      },
+      after: (result, ctx): unknown => {
+        const key = `${ctx.plugin}.${ctx.method}`;
+        const startTime = timings.get(key);
+        if (startTime) {
           const duration = Date.now() - startTime;
-          console.log(`  ⏱️  [TIMING] ${ctx.plugin}.${ctx.method} took ${duration}ms`);
-          return result;
-        },
-      };
+          console.log(`  ⏱️  [TIMING] ${key} took ${duration}ms`);
+          timings.delete(key);
+        }
+        return result;
+      },
     })
     // ✅ Specific auth proxy for API only
     .proxy(apiPlugin, {
