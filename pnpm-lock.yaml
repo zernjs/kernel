@@ -25,7 +25,7 @@ importers:
         version: 3.2.4(vitest@3.2.4(@types/node@24.3.0)(tsx@4.20.6))
       coverage-badges-cli:
         specifier: ^2.1.0
-        version: 2.1.0
+        version: 2.2.0
       eslint:
         specifier: ^9.33.0
         version: 9.37.0
@@ -848,8 +848,8 @@ packages:
     resolution: {integrity: sha512-5IKcdX0nnYavi6G7TtOhwkYzyjfJlatbjMjuLSfE2kYT5pMDOilZ4OvMhi637CcDICTmz3wARPoyhqyX1Y+XvA==}
     engines: {node: ^14.18.0 || >=16.10.0}
 
-  coverage-badges-cli@2.1.0:
-    resolution: {integrity: sha512-akV7OQ+qvv7BFeN+T+n4MQNrghAlvbJ1NY+1bcYF4H9Dv68J4ohMOjs5RerX2yVGHPUjebQE0lUnuaICuW0pnA==}
+  coverage-badges-cli@2.2.0:
+    resolution: {integrity: sha512-7E7TtxiybFkK5/FRkzt4WTNZkopEv+hra7I7k52fnOD0YBweCnmV4b0FCCEvnO8567e+xCEZ3AdbIfeVlkh+hg==}
     engines: {node: '>=v20.11.0', npm: '>=10.2.4'}
     hasBin: true
 
@@ -2310,7 +2310,7 @@ snapshots:
 
   consola@3.4.2: {}
 
-  coverage-badges-cli@2.1.0:
+  coverage-badges-cli@2.2.0:
     dependencies:
       '@types/fs-extra': 11.0.4
       '@types/minimist': 1.2.5
