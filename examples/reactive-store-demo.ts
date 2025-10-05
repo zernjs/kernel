@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * @file Store Demo
- * @description Comprehensive demonstration of store features
+ * @file Reactive Store Demo
+ * @description Comprehensive demonstration of reactive store features
  */
 
 import { plugin, createKernel } from '../src';
 
-console.log('\n🎯 Store Demo\n');
+console.log('\n🎯 Reactive Store Demo\n');
 
 // ============================================================================
 // Example 1: Basic Reactivity with watch()
