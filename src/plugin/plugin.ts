@@ -10,7 +10,13 @@ import type {
 } from '@/core';
 import { createPluginId, createVersion } from '@/core';
 import type { DepsWithMetadata } from '@/utils/types';
-import type { ProxyConfig, ProxyMetadata, ProxyTarget } from '@/extension/proxy-types';
+import type {
+  ProxyConfig,
+  ProxyMetadata,
+  ProxyTarget,
+  ProxyDependenciesWildcard,
+  ProxyGlobalWildcard,
+} from '@/extension/proxy-types';
 import { validateProxyConfig } from '@/extension/proxy-types';
 import { createStore, isStore } from '@/store';
 import type { Store } from '@/store';
@@ -252,45 +258,77 @@ export interface PluginBuilder<
   /**
    * Intercepts calls to all dependency plugins' methods.
    *
-   * @param target - Must be '*' to target all dependencies
+   * @param target - `'*'` - Proxies **all methods** of **all plugins** you declared with `.depends()`.
+   * Use this for timing, logging, or caching across multiple related plugins.
    * @param config - Proxy configuration with before/after/around/onError hooks
    * @returns Plugin builder
+   *
+   * @remarks
+   * The `'*'` wildcard proxies ALL methods of ALL plugins you've declared as dependencies.
+   * This is useful for cross-cutting concerns like timing, caching, or logging across
+   * multiple related plugins.
    *
    * @example
    * ```typescript
    * const timingPlugin = plugin('timing', '1.0.0')
-   *   .depends(mathPlugin, '^1.0.0')
-   *   .depends(apiPlugin, '^1.0.0')
-   *   .proxy('*', {
-   *     before: ctx => console.time(ctx.method),
-   *     after: (result, ctx) => console.timeEnd(ctx.method)
+   *   .depends(mathPlugin, '^1.0.0')    // Will be proxied
+   *   .depends(apiPlugin, '^1.0.0')     // Will be proxied
+   *   .proxy('*', {                     // '*' = all dependencies
+   *     before: ctx => {
+   *       console.log(`[${ctx.plugin}] Calling ${ctx.method}`);
+   *       console.time(`${ctx.plugin}.${ctx.method}`);
+   *     },
+   *     after: (result, ctx) => {
+   *       console.timeEnd(`${ctx.plugin}.${ctx.method}`);
+   *       return result;
+   *     }
    *   })
    *   .setup(() => ({}));
    * ```
    */
   proxy(
-    target: '*',
+    target: ProxyDependenciesWildcard,
     config: ProxyConfig<TStore>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
   /**
-   * Intercepts calls to all plugins in the kernel.
+   * Intercepts calls to ALL plugins in the kernel (global proxy).
    *
-   * @param target - Must be '**' to target all kernel plugins
+   * @param target - `'**'` - Proxies **ALL methods** of **EVERY plugin** in the kernel (even non-dependencies).
+   * Use carefully - affects the entire application. Good for global monitoring, error tracking, audit logs.
    * @param config - Proxy configuration with before/after/around/onError hooks
    * @returns Plugin builder
+   *
+   * @remarks
+   * The `'**'` double wildcard creates a GLOBAL proxy that intercepts ALL methods of
+   * ALL plugins registered in the kernel, even those not declared as dependencies.
+   * Use this carefully - it affects every plugin method call in your application.
+   *
+   * Ideal for:
+   * - Global performance monitoring
+   * - Universal error tracking
+   * - System-wide audit logging
+   * - Debug tracing in development
    *
    * @example
    * ```typescript
    * const monitorPlugin = plugin('monitor', '1.0.0')
-   *   .proxy('**', {
-   *     before: ctx => console.log(`[GLOBAL] ${ctx.plugin}.${ctx.method}()`)
+   *   .store(() => ({ calls: new Map<string, number>() }))
+   *   .proxy('**', {                    // '**' = ALL kernel plugins
+   *     before: ctx => {
+   *       const key = `${ctx.plugin}.${ctx.method}`;
+   *       const count = (ctx.store.calls.get(key) || 0) + 1;
+   *       ctx.store.calls.set(key, count);
+   *       console.log(`[GLOBAL] ${key} (#${count})`);
+   *     }
    *   })
-   *   .setup(() => ({}));
+   *   .setup(({ store }) => ({
+   *     getStats: () => Object.fromEntries(store.calls)
+   *   }));
    * ```
    */
   proxy(
-    target: '**',
+    target: ProxyGlobalWildcard,
     config: ProxyConfig<TStore>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 

@@ -47,6 +47,18 @@ export type { Kernel, BuiltKernel, KernelBuilder } from '@/kernel';
 export { createKernel } from '@/kernel';
 
 export type { PluginContainer } from '@/kernel';
+
+export type {
+  ProxyConfig,
+  ProxyContext,
+  ProxyBefore,
+  ProxyAfter,
+  ProxyError,
+  ProxyAround,
+  ProxyDependenciesWildcard,
+  ProxyGlobalWildcard,
+  MethodPattern,
+} from '@/extension/proxy-types';
 export { createPluginContainer } from '@/kernel';
 
 export type { LifecycleManager } from '@/kernel';

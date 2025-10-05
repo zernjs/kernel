@@ -1,19 +1,97 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { PluginId } from '@/core';
 
+/**
+ * Context object provided to proxy interceptors.
+ * Contains method information, arguments, store, and control helpers.
+ *
+ * @example
+ * ```typescript
+ * .proxy({
+ *   before: ctx => {
+ *     console.log(ctx.plugin);  // Plugin name
+ *     console.log(ctx.method);  // Method name
+ *     console.log(ctx.args);    // Method arguments
+ *     console.log(ctx.store);   // Reactive store
+ *   }
+ * })
+ * ```
+ */
 export interface ProxyContext<TMethod extends (...args: any[]) => any, TStore = any> {
+  /**
+   * Name of the plugin being proxied.
+   */
   readonly plugin: string;
+
+  /**
+   * Name of the method being called.
+   */
   readonly method: string;
+
+  /**
+   * Arguments passed to the method.
+   * Array of values that can be modified with modifyArgs().
+   */
   readonly args: Parameters<TMethod>;
 
   _skipExecution?: boolean;
   _overrideResult?: Awaited<ReturnType<TMethod>>;
   _modifiedArgs?: Parameters<TMethod>;
 
+  /**
+   * Reactive store shared across lifecycle, setup, and proxy interceptors.
+   * Read and write properties to share state.
+   *
+   * @example
+   * ```typescript
+   * before: ctx => {
+   *   ctx.store.callCount = (ctx.store.callCount || 0) + 1;
+   * }
+   * ```
+   */
   readonly store: TStore;
 
+  /**
+   * Skips execution of the original method.
+   * Use with replace() to provide a custom result.
+   *
+   * @example
+   * ```typescript
+   * before: ctx => {
+   *   if (cached) {
+   *     ctx.skip();
+   *     ctx.replace(cachedValue);
+   *   }
+   * }
+   * ```
+   */
   skip: () => void;
+
+  /**
+   * Replaces the method result with a custom value.
+   * Automatically calls skip() internally.
+   *
+   * @example
+   * ```typescript
+   * before: ctx => {
+   *   ctx.replace({ mock: 'data' });  // Returns this instead
+   * }
+   * ```
+   */
   replace: (result: Awaited<ReturnType<TMethod>>) => void;
+
+  /**
+   * Modifies the arguments before method execution.
+   * Only works in before interceptor.
+   *
+   * @example
+   * ```typescript
+   * before: ctx => {
+   *   const [a, b] = ctx.args;
+   *   ctx.modifyArgs(a * 2, b * 2);  // Double all args
+   * }
+   * ```
+   */
   modifyArgs: (...args: Parameters<TMethod>) => void;
 }
 
@@ -38,17 +116,170 @@ export type ProxyAround<TMethod extends (...args: any[]) => any, TStore = any> =
 
 export type MethodPattern = string | RegExp;
 
+/**
+ * `'*'` - Proxies all methods of all plugins declared in `.depends()`
+ *
+ * @example
+ * ```typescript
+ * .depends(mathPlugin)
+ * .depends(apiPlugin)
+ * .proxy('*', { ... })  // Proxies both mathPlugin and apiPlugin
+ * ```
+ */
+export type ProxyDependenciesWildcard = '*';
+
+/**
+ * `'**'` - Proxies all methods of ALL plugins in the kernel
+ *
+ * @example
+ * ```typescript
+ * .proxy('**', { ... })  // Proxies every plugin method in the application
+ * ```
+ */
+export type ProxyGlobalWildcard = '**';
+
+/**
+ * Configuration for method interception with proxies.
+ *
+ * @example
+ * ```typescript
+ * const plugin = plugin('myPlugin', '1.0.0')
+ *   .proxy({
+ *     include: ['fetch*', 'save*'],
+ *     before: ctx => console.log('Calling:', ctx.method),
+ *     after: (result, ctx) => {
+ *       console.log('Result:', result);
+ *       return result;
+ *     }
+ *   })
+ *   .setup(() => ({ ... }));
+ * ```
+ */
 export interface ProxyConfig<TStore = any> {
+  /**
+   * Glob patterns or regex to include specific methods.
+   * If not specified, all methods are included.
+   *
+   * @example
+   * ```typescript
+   * include: ['fetch*']        // All methods starting with 'fetch'
+   * include: ['get*', 'set*']  // Multiple patterns
+   * include: [/^(get|set)/]    // Using regex
+   * ```
+   */
   include?: MethodPattern[];
+
+  /**
+   * Glob patterns or regex to exclude specific methods.
+   * Takes precedence over include patterns.
+   *
+   * @example
+   * ```typescript
+   * exclude: ['internal*']  // Exclude internal methods
+   * exclude: [/_private$/]  // Exclude methods ending with _private
+   * ```
+   */
   exclude?: MethodPattern[];
 
+  /**
+   * Runs before the method execution.
+   * Can skip execution or modify arguments using ctx helpers.
+   *
+   * @example
+   * ```typescript
+   * before: ctx => {
+   *   console.log(`Calling ${ctx.method} with:`, ctx.args);
+   *   // Skip execution conditionally
+   *   if (someCondition) ctx.skip();
+   *   // Or modify arguments
+   *   ctx.modifyArgs(...newArgs);
+   * }
+   * ```
+   */
   before?: ProxyBefore<any, TStore>;
+
+  /**
+   * Runs after successful method execution.
+   * Can transform the result by returning a new value.
+   *
+   * @example
+   * ```typescript
+   * after: (result, ctx) => {
+   *   console.log(`${ctx.method} returned:`, result);
+   *   // Transform result
+   *   return transformedResult;
+   * }
+   * ```
+   */
   after?: ProxyAfter<any, TStore>;
+
+  /**
+   * Handles errors thrown during method execution.
+   * Can return a fallback value or re-throw.
+   *
+   * @example
+   * ```typescript
+   * onError: (error, ctx) => {
+   *   console.error(`${ctx.method} failed:`, error);
+   *   // Return fallback
+   *   return defaultValue;
+   *   // Or re-throw
+   *   throw new CustomError(error);
+   * }
+   * ```
+   */
   onError?: ProxyError<any, TStore>;
+
+  /**
+   * Complete control over method execution.
+   * Must call next() to execute the original method.
+   *
+   * @example
+   * ```typescript
+   * around: async (ctx, next) => {
+   *   console.time(ctx.method);
+   *   try {
+   *     const result = await next();
+   *     console.timeEnd(ctx.method);
+   *     return result;
+   *   } catch (error) {
+   *     console.timeEnd(ctx.method);
+   *     throw error;
+   *   }
+   * }
+   * ```
+   */
   around?: ProxyAround<any, TStore>;
 
+  /**
+   * Execution priority when multiple proxies target the same method.
+   * Higher numbers execute first. Default: 0.
+   *
+   * @example
+   * ```typescript
+   * priority: 10  // Executes before priority 0 proxies
+   * ```
+   */
   priority?: number;
+
+  /**
+   * Conditional execution - proxy only runs if this returns true.
+   *
+   * @example
+   * ```typescript
+   * condition: ctx => ctx.args[0] > 100  // Only proxy if first arg > 100
+   * ```
+   */
   condition?: (ctx: ProxyContext<any, TStore>) => boolean;
+
+  /**
+   * Optional group name for organizing related proxies.
+   *
+   * @example
+   * ```typescript
+   * group: 'logging'  // Group all logging proxies together
+   * ```
+   */
   group?: string;
 }
 

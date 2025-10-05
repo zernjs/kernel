@@ -8,7 +8,7 @@ import { LifecycleManager, createLifecycleManager } from './lifecycle';
 import { createExtensionManager } from '@/extension';
 import { setGlobalKernel } from '@/hooks';
 import type { PluginsMap } from '@/utils/types';
-import type { ProxyConfig, ProxyMetadata } from '@/extension/proxy-types';
+import type { ProxyConfig, ProxyMetadata, ProxyGlobalWildcard } from '@/extension/proxy-types';
 import { validateProxyConfig } from '@/extension/proxy-types';
 
 export interface Kernel<TPlugins = Record<string, unknown>> {
@@ -62,16 +62,34 @@ export interface KernelBuilder<
   /**
    * Intercepts calls to a specific plugin at the kernel level.
    *
-   * @param target - The plugin to intercept
-   * @param config - Proxy configuration
+   * @param target - The plugin instance to intercept
+   * @param config - Proxy configuration with before/after/around/onError hooks
    * @returns Kernel builder
+   *
+   * @remarks
+   * Kernel-level proxies are applied AFTER plugin initialization, allowing you to
+   * intercept methods without modifying the plugin itself. Useful for application-wide
+   * concerns like authentication checks, rate limiting, or request logging.
    *
    * @example
    * ```typescript
    * const kernel = createKernel()
    *   .use(apiPlugin)
+   *   .use(databasePlugin)
    *   .proxy(apiPlugin, {
-   *     before: ctx => checkAuth(ctx.method)
+   *     before: ctx => {
+   *       if (!isAuthenticated()) {
+   *         throw new Error('Unauthorized');
+   *       }
+   *     }
+   *   })
+   *   .proxy(databasePlugin, {
+   *     around: async (ctx, next) => {
+   *       console.log(`[DB] ${ctx.method} starting...`);
+   *       const result = await next();
+   *       console.log(`[DB] ${ctx.method} completed`);
+   *       return result;
+   *     }
    *   });
    * ```
    */
@@ -87,21 +105,52 @@ export interface KernelBuilder<
   ): KernelBuilder<U>;
 
   /**
-   * Intercepts calls to all plugins in the kernel.
+   * Intercepts calls to ALL plugins in the kernel (global kernel proxy).
    *
-   * @param target - Must be '**' for global interception
-   * @param config - Proxy configuration
+   * @param target - `'**'` - Proxies **ALL methods** of **EVERY plugin** at application level.
+   * Perfect for app-wide monitoring, auth checks, rate limiting, error boundaries.
+   * @param config - Proxy configuration with before/after/around/onError hooks
    * @returns Kernel builder
+   *
+   * @remarks
+   * The `'**'` wildcard at kernel level creates application-wide interception for
+   * ALL plugin methods. This is applied OUTSIDE the plugins themselves, making it
+   * perfect for cross-cutting concerns at the application layer.
+   *
+   * **Difference from plugin-level `'**'`:**
+   * - **Kernel proxy**: Applied at application level, after all plugins are initialized
+   * - **Plugin proxy**: Applied at plugin level, can be distributed with the plugin
+   *
+   * Use kernel-level `'**'` for:
+   * - Application-specific monitoring
+   * - Environment-based behavior (dev/prod)
+   * - Request/response transformation
+   * - Global error boundaries
    *
    * @example
    * ```typescript
    * const kernel = createKernel()
-   *   .proxy('**', {
-   *     before: ctx => console.log(`${ctx.plugin}.${ctx.method}()`)
+   *   .use(authPlugin)
+   *   .use(apiPlugin)
+   *   .use(databasePlugin)
+   *   .proxy('**', {                    // '**' = ALL plugins in this kernel
+   *     before: ctx => {
+   *       console.log(`[APP] ${ctx.plugin}.${ctx.method}(`, ...ctx.args, ')')
+   *     },
+   *     after: (result, ctx) => {
+   *       console.log(`[APP] ${ctx.plugin}.${ctx.method} =>`, result);
+   *       return result;
+   *     },
+   *     onError: (error, ctx) => {
+   *       console.error(`[APP ERROR] ${ctx.plugin}.${ctx.method}:`, error);
+   *       // Send to error tracking service
+   *       trackError({ plugin: ctx.plugin, method: ctx.method, error });
+   *       throw error;
+   *     }
    *   });
    * ```
    */
-  proxy(target: '**', config: ProxyConfig<any>): KernelBuilder<U>;
+  proxy(target: ProxyGlobalWildcard, config: ProxyConfig<any>): KernelBuilder<U>;
 
   /**
    * Builds the kernel without initializing plugins.
