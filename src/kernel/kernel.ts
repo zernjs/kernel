@@ -24,12 +24,56 @@ export interface BuiltKernel<TPlugins> {
 export interface KernelBuilder<
   U extends BuiltPlugin<string, unknown, unknown, unknown, any> = never,
 > {
+  /**
+   * Registers a plugin with the kernel.
+   *
+   * @param plugin - The built plugin to register
+   * @returns Kernel builder with updated plugin types
+   *
+   * @example
+   * ```typescript
+   * const kernel = createKernel()
+   *   .use(databasePlugin)
+   *   .use(authPlugin);
+   * ```
+   */
   use<P extends BuiltPlugin<string, unknown, unknown, unknown, any>>(
     plugin: P
   ): KernelBuilder<U | P>;
 
+  /**
+   * Configures kernel behavior.
+   *
+   * @param config - Partial kernel configuration
+   * @returns Kernel builder
+   *
+   * @example
+   * ```typescript
+   * const kernel = createKernel()
+   *   .withConfig({
+   *     strictVersioning: true,
+   *     initializationTimeout: 5000
+   *   });
+   * ```
+   */
   withConfig(config: Partial<KernelConfig>): KernelBuilder<U>;
 
+  /**
+   * Intercepts calls to a specific plugin at the kernel level.
+   *
+   * @param target - The plugin to intercept
+   * @param config - Proxy configuration
+   * @returns Kernel builder
+   *
+   * @example
+   * ```typescript
+   * const kernel = createKernel()
+   *   .use(apiPlugin)
+   *   .proxy(apiPlugin, {
+   *     before: ctx => checkAuth(ctx.method)
+   *   });
+   * ```
+   */
   proxy<
     TTargetName extends string,
     TTargetApi,
@@ -41,10 +85,45 @@ export interface KernelBuilder<
     config: ProxyConfig<TTargetStore>
   ): KernelBuilder<U>;
 
+  /**
+   * Intercepts calls to all plugins in the kernel.
+   *
+   * @param target - Must be '**' for global interception
+   * @param config - Proxy configuration
+   * @returns Kernel builder
+   *
+   * @example
+   * ```typescript
+   * const kernel = createKernel()
+   *   .proxy('**', {
+   *     before: ctx => console.log(`${ctx.plugin}.${ctx.method}()`)
+   *   });
+   * ```
+   */
   proxy(target: '**', config: ProxyConfig<any>): KernelBuilder<U>;
 
+  /**
+   * Builds the kernel without initializing plugins.
+   *
+   * @returns Built kernel ready for initialization
+   */
   build(): BuiltKernel<PluginsMap<U>>;
 
+  /**
+   * Builds and initializes the kernel with all plugins.
+   *
+   * @returns Promise resolving to initialized kernel
+   *
+   * @example
+   * ```typescript
+   * const kernel = await createKernel()
+   *   .use(databasePlugin)
+   *   .use(authPlugin)
+   *   .start();
+   *
+   * const db = kernel.get('database');
+   * ```
+   */
   start(): Promise<Kernel<PluginsMap<U>>>;
 }
 

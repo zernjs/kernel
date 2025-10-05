@@ -1,8 +1,3 @@
-/**
- * @file Error handling system for the Zern Kernel
- * @description Provides a unified error handling system for the Kernel
- */
-
 export abstract class ZernError extends Error {
   abstract readonly code: string;
 

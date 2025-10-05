@@ -66,18 +66,90 @@ export interface PluginBuilder<
   TMetadata = Record<string, unknown>,
   TStore extends Record<string, any> = Record<string, never>,
 > {
+  /**
+   * Creates a reactive store for shared plugin state.
+   *
+   * @param factory - Function that returns the initial store state
+   * @returns Plugin builder with store type
+   *
+   * @example
+   * ```typescript
+   * const dbPlugin = plugin('database', '1.0.0')
+   *   .store(() => ({
+   *     connection: null,
+   *     queryCount: 0
+   *   }))
+   *   .setup(({ store }) => ({
+   *     query: async (sql: string) => {
+   *       store.queryCount++;
+   *       return await store.connection.execute(sql);
+   *     }
+   *   }));
+   * ```
+   */
   store<TNewStore extends Record<string, any>>(
     factory: () => TNewStore
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TNewStore>;
 
+  /**
+   * Attaches custom metadata to the plugin.
+   *
+   * @param metadata - Metadata object with custom properties
+   * @returns Plugin builder with metadata type
+   *
+   * @example
+   * ```typescript
+   * const apiPlugin = plugin('api', '1.0.0')
+   *   .metadata({
+   *     author: 'Zern Team',
+   *     category: 'network',
+   *     rateLimit: 1000
+   *   })
+   *   .setup(() => ({ fetch: async (url: string) => {} }));
+   * ```
+   */
   metadata<TNewMetadata extends Record<string, unknown>>(
     metadata: TNewMetadata
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TNewMetadata, TStore>;
 
+  /**
+   * Defines the plugin's public API.
+   *
+   * @param fn - Function that receives context and returns the API object
+   * @returns Built plugin ready for use
+   *
+   * @example
+   * ```typescript
+   * const mathPlugin = plugin('math', '1.0.0')
+   *   .setup(() => ({
+   *     add: (a: number, b: number) => a + b,
+   *     multiply: (a: number, b: number) => a * b
+   *   }));
+   * ```
+   */
   setup<TNewApi>(
     fn: (ctx: PluginSetupContext<TDeps, TStore>) => TNewApi
   ): BuiltPlugin<TName, TNewApi, TExtMap, TMetadata, TStore>;
 
+  /**
+   * Declares a dependency on another plugin with optional version constraint.
+   *
+   * @param plugin - The plugin to depend on
+   * @param versionRange - Optional semantic version range (e.g., "^1.0.0", ">=2.0.0")
+   * @returns Plugin builder with updated dependency types
+   *
+   * @example
+   * ```typescript
+   * const authPlugin = plugin('auth', '1.0.0')
+   *   .depends(databasePlugin, '^1.0.0')
+   *   .setup(({ plugins }) => ({
+   *     login: async (username: string) => {
+   *       // Access database plugin with full type safety
+   *       return await plugins.database.users.findByUsername(username);
+   *     }
+   *   }));
+   * ```
+   */
   depends<
     TDepName extends string,
     TDepApi,
@@ -96,6 +168,26 @@ export interface PluginBuilder<
     TStore
   >;
 
+  /**
+   * Extends another plugin's API with additional methods.
+   *
+   * @param target - The plugin to extend
+   * @param fn - Function that receives the target API and returns extension methods
+   * @returns Plugin builder with updated extension map
+   *
+   * @example
+   * ```typescript
+   * const advancedMathPlugin = plugin('advancedMath', '1.0.0')
+   *   .depends(mathPlugin, '^1.0.0')
+   *   .extend(mathPlugin, api => ({
+   *     power: (base: number, exp: number) => Math.pow(base, exp),
+   *     sqrt: (x: number) => Math.sqrt(x)
+   *   }))
+   *   .setup(() => ({}));
+   *
+   * // Later: math.power(2, 3) is available
+   * ```
+   */
   extend<
     TTargetName extends string,
     TTargetApi,
@@ -108,8 +200,43 @@ export interface PluginBuilder<
     fn: (api: TTargetApi) => TExt
   ): PluginBuilder<TName, TApi, TDeps, TExtMap & Record<TTargetName, TExt>, TMetadata, TStore>;
 
+  /**
+   * Intercepts calls to the plugin's own methods.
+   *
+   * @param config - Proxy configuration with before/after/around/onError hooks
+   * @returns Plugin builder
+   *
+   * @example
+   * ```typescript
+   * const mathPlugin = plugin('math', '1.0.0')
+   *   .proxy({
+   *     include: ['add'],
+   *     before: ctx => console.log('Calling add:', ctx.args)
+   *   })
+   *   .setup(() => ({
+   *     add: (a: number, b: number) => a + b
+   *   }));
+   * ```
+   */
   proxy(config: ProxyConfig<TStore>): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
+  /**
+   * Intercepts calls to a specific dependency plugin's methods.
+   *
+   * @param target - The dependency plugin to intercept
+   * @param config - Proxy configuration with before/after/around/onError hooks
+   * @returns Plugin builder
+   *
+   * @example
+   * ```typescript
+   * const loggingPlugin = plugin('logging', '1.0.0')
+   *   .depends(mathPlugin, '^1.0.0')
+   *   .proxy(mathPlugin, {
+   *     before: ctx => console.log(`[LOG] ${ctx.method}(${ctx.args})`)
+   *   })
+   *   .setup(() => ({}));
+   * ```
+   */
   proxy<
     TTargetName extends string,
     TTargetApi,
@@ -121,25 +248,124 @@ export interface PluginBuilder<
     config: ProxyConfig<TStore>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
+  /**
+   * Intercepts calls to all dependency plugins' methods.
+   *
+   * @param target - Must be '*' to target all dependencies
+   * @param config - Proxy configuration with before/after/around/onError hooks
+   * @returns Plugin builder
+   *
+   * @example
+   * ```typescript
+   * const timingPlugin = plugin('timing', '1.0.0')
+   *   .depends(mathPlugin, '^1.0.0')
+   *   .depends(apiPlugin, '^1.0.0')
+   *   .proxy('*', {
+   *     before: ctx => console.time(ctx.method),
+   *     after: (result, ctx) => console.timeEnd(ctx.method)
+   *   })
+   *   .setup(() => ({}));
+   * ```
+   */
   proxy(
     target: '*',
     config: ProxyConfig<TStore>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
+  /**
+   * Intercepts calls to all plugins in the kernel.
+   *
+   * @param target - Must be '**' to target all kernel plugins
+   * @param config - Proxy configuration with before/after/around/onError hooks
+   * @returns Plugin builder
+   *
+   * @example
+   * ```typescript
+   * const monitorPlugin = plugin('monitor', '1.0.0')
+   *   .proxy('**', {
+   *     before: ctx => console.log(`[GLOBAL] ${ctx.plugin}.${ctx.method}()`)
+   *   })
+   *   .setup(() => ({}));
+   * ```
+   */
   proxy(
     target: '**',
     config: ProxyConfig<TStore>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
+  /**
+   * Executes before the plugin's API is created.
+   *
+   * @param hook - Initialization function
+   * @returns Plugin builder
+   *
+   * @example
+   * ```typescript
+   * const dbPlugin = plugin('database', '1.0.0')
+   *   .onInit(async ({ store }) => {
+   *     store.connection = await createConnection();
+   *   })
+   *   .setup(() => ({}));
+   * ```
+   */
   onInit(
     hook: PluginLifecycleHooks<DepsWithMetadata<TDeps>, TStore>['onInit']
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
+
+  /**
+   * Executes after all plugins are initialized and ready.
+   *
+   * @param hook - Ready callback function with access to plugin API
+   * @returns Plugin builder
+   *
+   * @example
+   * ```typescript
+   * const apiPlugin = plugin('api', '1.0.0')
+   *   .onReady(({ api }) => {
+   *     console.log('API ready:', api.endpoints);
+   *   })
+   *   .setup(() => ({ endpoints: ['/users', '/posts'] }));
+   * ```
+   */
   onReady(
     hook: PluginLifecycleHooks<DepsWithMetadata<TDeps>, TStore, TApi>['onReady']
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
+
+  /**
+   * Executes when the kernel shuts down.
+   *
+   * @param hook - Shutdown callback for cleanup
+   * @returns Plugin builder
+   *
+   * @example
+   * ```typescript
+   * const dbPlugin = plugin('database', '1.0.0')
+   *   .onShutdown(async ({ store }) => {
+   *     await store.connection?.close();
+   *   })
+   *   .setup(() => ({}));
+   * ```
+   */
   onShutdown(
     hook: PluginLifecycleHooks<DepsWithMetadata<TDeps>, TStore, TApi>['onShutdown']
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
+
+  /**
+   * Handles errors during plugin initialization.
+   *
+   * @param hook - Error handler function
+   * @returns Plugin builder
+   *
+   * @example
+   * ```typescript
+   * const apiPlugin = plugin('api', '1.0.0')
+   *   .onError((error, { store }) => {
+   *     store.errors.push(error);
+   *     console.error('Plugin error:', error);
+   *   })
+   *   .setup(() => ({}));
+   * ```
+   */
   onError(
     hook: PluginLifecycleHooks<DepsWithMetadata<TDeps>, TStore>['onError']
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;

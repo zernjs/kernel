@@ -1,11 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/**
- * @description Fundamental types for the Zern Kernel, like Branded types for type safety
- */
-
 import type { Store } from '@/store';
 
-// Branded types for unique IDs
 export type PluginId = string & { readonly __brand: 'PluginId' };
 export type KernelId = string & { readonly __brand: 'KernelId' };
 export type Version = string & { readonly __brand: 'Version' };
@@ -86,14 +81,39 @@ export interface PluginLifecycleHooks<
   ) => void | Promise<void>;
 }
 
+/**
+ * Creates a branded PluginId from a string.
+ *
+ * @param value - String identifier for the plugin
+ * @returns Branded PluginId type
+ */
 export function createPluginId(value: string): PluginId {
   return value as PluginId;
 }
 
+/**
+ * Creates a branded KernelId from a string.
+ *
+ * @param value - String identifier for the kernel
+ * @returns Branded KernelId type
+ */
 export function createKernelId(value: string): KernelId {
   return value as KernelId;
 }
 
+/**
+ * Creates a branded Version from a semantic version string.
+ *
+ * @param value - Semantic version string (e.g., "1.2.3")
+ * @returns Branded Version type
+ * @throws Error if version format is invalid
+ *
+ * @example
+ * ```typescript
+ * const version = createVersion('1.0.0');
+ * const versionWithPrerelease = createVersion('2.0.0-beta.1');
+ * ```
+ */
 export function createVersion(value: string): Version {
   if (!isValidVersion(value)) {
     throw new Error(`Invalid version: ${value}`);

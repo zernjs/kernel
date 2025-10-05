@@ -1,20 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/**
- * @file Proxy types for method interception
- * @description Modern, simplified types for proxying plugin methods
- */
-
 import type { PluginId } from '@/core';
 
-// ============================================================================
-// PROXY CONTEXT - Simplified and powerful
-// ============================================================================
-
-/**
- * Context provided to proxy interceptors
- * Contains method info, args, control methods, and shared store
- * TStore: Type for ctx.store - shared state between lifecycle/setup/proxy
- */
 export interface ProxyContext<TMethod extends (...args: any[]) => any, TStore = any> {
   readonly plugin: string;
   readonly method: string;
@@ -31,58 +17,27 @@ export interface ProxyContext<TMethod extends (...args: any[]) => any, TStore = 
   modifyArgs: (...args: Parameters<TMethod>) => void;
 }
 
-// ============================================================================
-// INTERCEPTOR TYPES - Clean and intuitive
-// ============================================================================
-
-/**
- * Before interceptor - runs before method execution
- * Return void to continue, or use ctx.skip()/ctx.replace() to control flow
- */
 export type ProxyBefore<TMethod extends (...args: any[]) => any, TStore = any> = (
   ctx: ProxyContext<TMethod, TStore>
 ) => void | Promise<void>;
 
-/**
- * After interceptor - runs after successful method execution
- * Can modify the result by returning a new value
- */
 export type ProxyAfter<TMethod extends (...args: any[]) => any, TStore = any> = (
   result: Awaited<ReturnType<TMethod>>,
   ctx: ProxyContext<TMethod, TStore>
 ) => Awaited<ReturnType<TMethod>> | Promise<Awaited<ReturnType<TMethod>>>;
 
-/**
- * Error interceptor - runs when method throws an error
- * Can return a fallback value or re-throw
- */
 export type ProxyError<TMethod extends (...args: any[]) => any, TStore = any> = (
   error: Error,
   ctx: ProxyContext<TMethod, TStore>
 ) => Awaited<ReturnType<TMethod>> | Promise<Awaited<ReturnType<TMethod>>> | never;
 
-/**
- * Around interceptor - full control over method execution
- * Use next() to call the original method
- */
 export type ProxyAround<TMethod extends (...args: any[]) => any, TStore = any> = (
   ctx: ProxyContext<TMethod, TStore>,
   next: () => Promise<Awaited<ReturnType<TMethod>>>
 ) => Promise<Awaited<ReturnType<TMethod>>>;
 
-// ============================================================================
-// PROXY CONFIGURATION - Unified and flexible
-// ============================================================================
-
-/**
- * Pattern for method matching (glob-style or regex)
- */
 export type MethodPattern = string | RegExp;
 
-/**
- * Proxy configuration - object with interceptors
- * Store is accessible via ctx.store in all interceptors
- */
 export interface ProxyConfig<TStore = any> {
   include?: MethodPattern[];
   exclude?: MethodPattern[];
@@ -97,30 +52,13 @@ export interface ProxyConfig<TStore = any> {
   group?: string;
 }
 
-// ============================================================================
-// INTERNAL TYPES - For kernel/extension manager
-// ============================================================================
-
-/**
- * Proxy target type
- * - PluginId: Specific plugin
- * - 'self': Plugin's own methods
- * - '*': All dependencies
- * - '**': All plugins in kernel
- */
 export type ProxyTarget = PluginId | 'self' | '*' | '**';
 
-/**
- * Internal proxy metadata stored by the kernel
- */
 export interface ProxyMetadata {
   readonly targetPluginId: ProxyTarget;
   readonly config: ProxyConfig<any>;
 }
 
-/**
- * Compiled proxy for a specific method
- */
 export interface CompiledMethodProxy {
   readonly targetPluginId: PluginId;
   readonly methodName: string;
@@ -133,20 +71,10 @@ export interface CompiledMethodProxy {
   readonly group?: string;
 }
 
-// ============================================================================
-// HELPER TYPES
-// ============================================================================
-
-/**
- * Extract all method names from a plugin API
- */
 export type ExtractMethodNames<TPlugin> = {
   [K in keyof TPlugin]: TPlugin[K] extends (...args: any[]) => any ? K : never;
 }[keyof TPlugin];
 
-/**
- * Check if a method name matches a pattern
- */
 export function matchesPattern(methodName: string, pattern: MethodPattern): boolean {
   if (pattern instanceof RegExp) {
     return pattern.test(methodName);
@@ -158,9 +86,6 @@ export function matchesPattern(methodName: string, pattern: MethodPattern): bool
   return regex.test(methodName);
 }
 
-/**
- * Check if a method should be proxied based on config
- */
 export function shouldProxyMethod(methodName: string, config: ProxyConfig): boolean {
   if (config.include && config.include.length > 0) {
     const included = config.include.some((pattern: MethodPattern) =>
@@ -179,28 +104,15 @@ export function shouldProxyMethod(methodName: string, config: ProxyConfig): bool
   return true;
 }
 
-// ============================================================================
-// CONTEXT HELPER METHODS
-// ============================================================================
-
-/**
- * Skip method execution
- */
 export function skipExecution<TStore = any>(ctx: ProxyContext<any, TStore>): void {
   ctx._skipExecution = true;
 }
 
-/**
- * Replace method result
- */
 export function replaceResult<T, TStore = any>(ctx: ProxyContext<any, TStore>, result: T): void {
   ctx._skipExecution = true;
   ctx._overrideResult = result;
 }
 
-/**
- * Modify method arguments
- */
 export function modifyArgs<TMethod extends (...args: any[]) => any, TStore = any>(
   ctx: ProxyContext<TMethod, TStore>,
   ...newArgs: Parameters<TMethod>
@@ -208,10 +120,6 @@ export function modifyArgs<TMethod extends (...args: any[]) => any, TStore = any
   ctx._modifiedArgs = newArgs;
 }
 
-/**
- * Attach helper methods to context
- * Store must be provided separately and is immutable reference
- */
 export function enhanceContext<
   TMethod extends (...args: any[]) => any,
   TStore = Record<string, never>,
