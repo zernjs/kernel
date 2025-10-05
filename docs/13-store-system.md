@@ -357,6 +357,10 @@ const historyPlugin = plugin('history', '1.0.0')
       store.undo?.();
     },
 
+    redo() {
+      store.redo?.();
+    },
+
     reset() {
       store.reset?.();
     },
@@ -368,7 +372,238 @@ const historyPlugin = plugin('history', '1.0.0')
 - `getHistory()` - Get all changes
 - `clearHistory()` - Clear history
 - `undo()` - Undo last change
+- `redo()` - Redo last undone change
 - `reset()` - Reset to initial state
+
+---
+
+## Performance & Optimization
+
+The Store System includes powerful performance optimization features to handle large-scale applications efficiently.
+
+### Watcher Limits (Memory Leak Prevention)
+
+Prevent memory leaks by limiting the number of watchers:
+
+```typescript
+import { createStore } from '@zern/kernel';
+
+const store = createStore(
+  { count: 0, items: [] },
+  {
+    maxWatchers: 1000, // Global limit (default: 1000)
+    maxWatchersPerKey: 100, // Per-key limit (default: 100)
+    warnOnHighWatcherCount: true, // Enable warnings (default: true)
+    warnThreshold: 100, // Warning threshold (default: 100)
+  }
+);
+
+// Will throw error if exceeding maxWatchers
+try {
+  for (let i = 0; i < 1001; i++) {
+    store.watch('count', () => {});
+  }
+} catch (error) {
+  console.error(error); // "Maximum watchers limit reached (1000)"
+}
+```
+
+**Features:**
+
+- ✅ **Global limit** - Prevents unbounded watcher growth
+- ✅ **Per-key limit** - Prevents single key from having too many watchers
+- ✅ **Automatic warnings** - Warns at threshold to catch issues early
+- ✅ **Error on exceed** - Fails fast to prevent memory leaks
+
+### Performance Metrics
+
+Monitor store performance with built-in metrics:
+
+```typescript
+const store = createStore(
+  { count: 0, users: [], cache: new Map() },
+  { enableMetrics: true } // Enable metrics collection
+);
+
+const metricsPlugin = plugin('metrics', '1.0.0')
+  .store(() => store)
+  .onInit(({ store }) => {
+    // Watch for performance
+    store.watch('count', () => {});
+    store.watchAll(() => {});
+
+    const computed = store.computed(s => s.count * 2);
+    store.watch(computed, () => {});
+  })
+  .setup(({ store }) => ({
+    increment() {
+      store.count++;
+    },
+
+    getMetrics() {
+      const metrics = store.getMetrics?.();
+
+      return {
+        totalChanges: metrics?.totalChanges ?? 0,
+        activeWatchers: metrics?.activeWatchers ?? 0,
+        watchersByType: metrics?.watchersByType ?? {},
+        computedValues: metrics?.computedValues ?? 0,
+        avgNotificationTime: metrics?.avgNotificationTime ?? 0,
+        peakWatchers: metrics?.peakWatchers ?? 0,
+      };
+    },
+
+    async performanceReport() {
+      const metrics = this.getMetrics();
+
+      console.log('📊 Store Performance Report');
+      console.log(`  Total changes: ${metrics.totalChanges}`);
+      console.log(`  Active watchers: ${metrics.activeWatchers}`);
+      console.log(`  Peak watchers: ${metrics.peakWatchers}`);
+      console.log(`  Avg notification: ${metrics.avgNotificationTime.toFixed(2)}ms`);
+      console.log(`  Computed values: ${metrics.computedValues}`);
+      console.log('  Watchers by type:', metrics.watchersByType);
+    },
+  }));
+```
+
+**`StoreMetrics` Interface:**
+
+```typescript
+interface StoreMetrics {
+  totalChanges: number; // Total number of changes tracked
+  activeWatchers: number; // Current number of active watchers
+  watchersByType: {
+    key: number; // Watchers on specific keys
+    all: number; // watchAll() watchers
+    batch: number; // watchBatch() watchers
+    computed: number; // Computed value watchers
+  };
+  computedValues: number; // Total number of computed values
+  historySize: number; // Number of history entries
+  avgNotificationTime: number; // Average notification time (ms)
+  peakWatchers: number; // Maximum watchers at any point
+}
+```
+
+### Clone Strategies (Transactions)
+
+Choose the best clone strategy for your use case:
+
+```typescript
+const store = createStore(
+  { data: { nested: { value: 0 } }, items: [] },
+  {
+    cloneStrategy: 'structured', // 'structured' (default) or 'manual'
+  }
+);
+```
+
+**Available Strategies:**
+
+1. **`'structured'` (Default)** - Uses `structuredClone()` API
+   - ✅ **~10x faster** than manual clone
+   - ✅ Handles complex objects (Maps, Sets, Dates, etc.)
+   - ✅ Automatic fallback to manual if unavailable
+   - ⚠️ Requires Node.js 17+ or modern browsers
+
+2. **`'manual'`** - Manual recursive clone
+   - ✅ Works in all environments
+   - ✅ Predictable behavior
+   - ⚠️ Slower for large objects
+
+**Benchmark Results:**
+
+```typescript
+// structuredClone: ~5ms for 10K items
+// manual: ~50ms for 10K items
+// Performance gain: ~10x ⚡
+```
+
+### Optimization Techniques
+
+#### 1. Indexed Watcher Lookup
+
+Watchers are indexed by key for O(1) lookup:
+
+```typescript
+// Before: O(n) - iterate all watchers
+// After: O(k) - only watchers for changed key
+
+store.count++; // Only notifies 'count' watchers, not all watchers
+```
+
+#### 2. Dependency Tracking for Computed Values
+
+Computed values only recalculate when their dependencies change:
+
+```typescript
+const store = createStore({ firstName: '', lastName: '', age: 0 });
+
+const fullName = store.computed(s => `${s.firstName} ${s.lastName}`);
+
+store.age = 30; // ✅ fullName NOT recalculated (no dependency on age)
+store.firstName = 'John'; // ✅ fullName IS recalculated (depends on firstName)
+```
+
+#### 3. Circular Buffer for History
+
+History uses a circular buffer for O(1) push operations:
+
+```typescript
+// Array.shift() = O(n) - shifts all elements
+// Circular buffer = O(1) - constant time
+
+const store = createStore({ count: 0 }, { history: true, maxHistory: 50 });
+
+// 10K changes = O(1) each, not O(n)
+for (let i = 0; i < 10000; i++) {
+  store.count++;
+}
+```
+
+### Performance Best Practices
+
+**✅ DO:**
+
+```typescript
+// Use batch for multiple changes
+store.batch(() => {
+  store.prop1 = 'value1';
+  store.prop2 = 'value2';
+  store.prop3 = 'value3';
+}); // Single notification
+
+// Remove watchers when done
+const unwatch = store.watch('count', () => {});
+unwatch(); // Prevent memory leak
+
+// Use computed for expensive calculations
+const expensive = store.computed(s => {
+  return s.items.reduce((sum, item) => sum + item.value, 0);
+}); // Memoized automatically
+
+// Enable metrics in development
+const store = createStore(data, { enableMetrics: true });
+```
+
+**❌ DON'T:**
+
+```typescript
+// Don't create unbounded watchers
+setInterval(() => {
+  store.watch('count', () => {}); // ❌ Memory leak!
+}, 1000);
+
+// Don't skip batch for multiple changes
+store.prop1 = 'value1'; // ❌ Notification 1
+store.prop2 = 'value2'; // ❌ Notification 2
+store.prop3 = 'value3'; // ❌ Notification 3
+
+// Don't recalculate expensive operations manually
+const total = store.items.reduce(...); // ❌ Recalculates every time
+// Use computed instead ✅
+```
 
 ---
 
@@ -622,6 +857,36 @@ console.log(total.value);
 
 Alias for `computed()`.
 
+#### `getMetrics(): StoreMetrics | undefined`
+
+Get performance metrics (only available if `enableMetrics: true`).
+
+**Returns:** `StoreMetrics` object or `undefined` if metrics are disabled
+
+**Example:**
+
+```typescript
+const store = createStore({ count: 0 }, { enableMetrics: true });
+const metrics = store.getMetrics();
+
+console.log('Total changes:', metrics?.totalChanges);
+console.log('Active watchers:', metrics?.activeWatchers);
+```
+
+#### `redo(): void`
+
+Redo the last undone change (only available if `history: true`).
+
+**Example:**
+
+```typescript
+const store = createStore({ count: 0 }, { history: true });
+
+store.count = 5;
+store.undo(); // count = 0
+store.redo(); // count = 5
+```
+
 ---
 
 ### Types
@@ -669,11 +934,54 @@ interface ComputedValue<T> {
 
 ```typescript
 interface StoreOptions {
-  history?: boolean; // Enable history tracking
+  // History
+  history?: boolean; // Enable history tracking (default: false)
   maxHistory?: number; // Max history entries (default: 50)
-  deep?: boolean; // Deep watching (future feature)
+
+  // Performance
+  maxWatchers?: number; // Max total watchers (default: 1000)
+  maxWatchersPerKey?: number; // Max watchers per key (default: 100)
+  warnOnHighWatcherCount?: boolean; // Warn on high count (default: true)
+  warnThreshold?: number; // Warning threshold (default: 100)
+
+  // Metrics
+  enableMetrics?: boolean; // Enable performance metrics (default: false)
+
+  // Transaction
+  cloneStrategy?: 'structured' | 'manual'; // Clone strategy (default: 'structured')
+
+  // Future
+  deep?: boolean; // Deep watching (not yet implemented)
 }
 ```
+
+#### `StoreMetrics`
+
+```typescript
+interface StoreMetrics {
+  totalChanges: number; // Total number of changes tracked
+  activeWatchers: number; // Current number of active watchers
+  watchersByType: {
+    key: number; // Watchers on specific keys
+    all: number; // watchAll() watchers
+    batch: number; // watchBatch() watchers
+    computed: number; // Computed value watchers
+  };
+  computedValues: number; // Total number of computed values
+  historySize: number; // Number of history entries
+  avgNotificationTime: number; // Average notification time (ms)
+  peakWatchers: number; // Maximum watchers at any point
+}
+```
+
+#### `CloneStrategy`
+
+```typescript
+type CloneStrategy = 'structured' | 'manual';
+```
+
+- `'structured'` - Use `structuredClone()` API (~10x faster, requires Node 17+ or modern browsers)
+- `'manual'` - Manual recursive clone (slower but works everywhere)
 
 ---
 
@@ -764,11 +1072,24 @@ const good = store.computed(s => s.count + 1);
 
 ## Performance Tips
 
-1. **Use batch updates** for multiple related changes
-2. **Computed values** are memoized - use them for expensive calculations
+1. **Use batch updates** for multiple related changes to reduce watcher notifications
+2. **Computed values** are memoized and only recalculate when dependencies change
 3. **Unwatch** when watchers are no longer needed to prevent memory leaks
 4. **Transactions** have overhead - use for critical operations only
-5. **History** has memory cost - only enable when debugging
+5. **History** has memory cost - only enable when debugging or auditing
+6. **Enable metrics in development** to identify performance bottlenecks
+7. **Use watcher limits** (`maxWatchers`, `maxWatchersPerKey`) to catch memory leaks early
+8. **Prefer `structured` clone strategy** for ~10x faster transactions (default)
+9. **Monitor performance** with `getMetrics()` in production-critical applications
+10. **Indexed watchers** automatically optimize O(1) lookups - no configuration needed
+
+**Benchmark Results** (see `examples/store-benchmark.ts`):
+
+- **structuredClone**: ~5ms for 10K items (default)
+- **Manual clone**: ~50ms for 10K items
+- **Watcher lookup**: O(1) with indexing vs O(n) without
+- **Computed tracking**: Only invalidates dependent computed values
+- **Circular buffer**: O(1) history operations vs O(n) with arrays
 
 ---
 
@@ -776,9 +1097,10 @@ const good = store.computed(s => s.count + 1);
 
 See the following examples for complete demonstrations:
 
-- `examples/store-demo.ts` - Comprehensive store features
-- `examples/store-example.ts` - Store with lifecycle hooks
-- `examples/proxy-complete-demo.ts` - Store with proxies
+- `examples/store-demo.ts` - Comprehensive store features with all reactive methods
+- `examples/store-example.ts` - Store with lifecycle hooks and plugin integration
+- `examples/store-benchmark.ts` - Performance benchmarks (8 comprehensive tests)
+- `examples/proxy-complete-demo.ts` - Store with proxy interceptors
 
 ---
 

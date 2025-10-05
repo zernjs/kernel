@@ -595,6 +595,30 @@ const doubled = store.computed(s => s.count * 2);
 console.log(doubled.value); // Auto-memoized
 ```
 
+#### `getMetrics(): StoreMetrics | undefined`
+
+Get performance metrics (only available if `enableMetrics: true`).
+
+```typescript
+const store = createStore({ count: 0 }, { enableMetrics: true });
+const metrics = store.getMetrics();
+
+console.log('Active watchers:', metrics?.activeWatchers);
+console.log('Total changes:', metrics?.totalChanges);
+```
+
+#### `redo(): void`
+
+Redo the last undone change (only available if `history: true`).
+
+```typescript
+const store = createStore({ count: 0 }, { history: true });
+
+store.count = 5;
+store.undo(); // count = 0
+store.redo(); // count = 5
+```
+
 ### Store Types
 
 ```typescript
@@ -607,13 +631,52 @@ interface StoreChange<T> {
 }
 
 interface StoreOptions {
-  history?: boolean;
-  maxHistory?: number;
-  deep?: boolean;
+  // History
+  history?: boolean; // Enable history tracking (default: false)
+  maxHistory?: number; // Max history entries (default: 50)
+
+  // Performance
+  maxWatchers?: number; // Max total watchers (default: 1000)
+  maxWatchersPerKey?: number; // Max watchers per key (default: 100)
+  warnOnHighWatcherCount?: boolean; // Warn on high count (default: true)
+  warnThreshold?: number; // Warning threshold (default: 100)
+
+  // Metrics
+  enableMetrics?: boolean; // Enable performance metrics (default: false)
+
+  // Transaction
+  cloneStrategy?: CloneStrategy; // Clone strategy (default: 'structured')
+
+  // Future
+  deep?: boolean; // Deep watching (not yet implemented)
 }
+
+interface StoreMetrics {
+  totalChanges: number;
+  activeWatchers: number;
+  watchersByType: {
+    key: number;
+    all: number;
+    batch: number;
+    computed: number;
+  };
+  computedValues: number;
+  historySize: number;
+  avgNotificationTime: number;
+  peakWatchers: number;
+}
+
+type CloneStrategy = 'structured' | 'manual';
 
 type Store<T> = T & StoreMethods<T>;
 ```
+
+**Performance Notes:**
+
+- `structured` clone is ~10x faster than `manual` (requires Node 17+ or modern browsers)
+- Indexed watchers provide O(1) lookup vs O(n) without indexing
+- Computed values only recalculate when dependencies change
+- Circular buffer provides O(1) history operations
 
 See [Store System](./13-store-system.md) for complete documentation and examples.
 

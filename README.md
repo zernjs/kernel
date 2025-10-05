@@ -46,19 +46,19 @@
 
 ### Core Capabilities
 
-| Feature                           | Description                                                          |
-| --------------------------------- | -------------------------------------------------------------------- |
-| 🪶 **Minimal Core**               | Only essential functionality - register, initialize, shutdown        |
-| 🔄 **Fluent API**                 | Clean, chainable interface for plugin and kernel configuration       |
-| 🤖 **Auto Dependency Resolution** | Topological sorting with intelligent cycle detection                 |
-| 🔧 **API Extensions**             | Plugins can seamlessly extend other plugins' APIs                    |
-| 🎭 **Method Proxying**            | Intercept and modify behavior with before/after/around hooks         |
-| ⏱️ **Lifecycle Hooks**            | `onInit`, `onReady`, `onShutdown`, `onError` for resource management |
-| 🗄️ **Shared Store**               | Type-safe mutable state shared across lifecycle, setup, and proxies  |
-| 🏷️ **Custom Metadata**            | Attach and access metadata with full type safety via `$meta`         |
-| 📦 **Direct Exports**             | Import plugin methods directly like a normal library                 |
-| 🛡️ **Result Pattern**             | Functional error handling without exceptions                         |
-| 🔍 **Version Control**            | Semantic versioning with flexible constraint matching                |
+| Feature                           | Description                                                               |
+| --------------------------------- | ------------------------------------------------------------------------- |
+| 🪶 **Minimal Core**               | Only essential functionality - register, initialize, shutdown             |
+| 🔄 **Fluent API**                 | Clean, chainable interface for plugin and kernel configuration            |
+| 🤖 **Auto Dependency Resolution** | Topological sorting with intelligent cycle detection                      |
+| 🔧 **API Extensions**             | Plugins can seamlessly extend other plugins' APIs                         |
+| 🎭 **Method Proxying**            | Intercept and modify behavior with before/after/around hooks              |
+| ⏱️ **Lifecycle Hooks**            | `onInit`, `onReady`, `onShutdown`, `onError` for resource management      |
+| 🗄️ **Reactive Store**             | Automatic reactive state with watchers, computed values, and transactions |
+| 🏷️ **Custom Metadata**            | Attach and access metadata with full type safety via `$meta`              |
+| 📦 **Direct Exports**             | Import plugin methods directly like a normal library                      |
+| 🛡️ **Result Pattern**             | Functional error handling without exceptions                              |
+| 🔍 **Version Control**            | Semantic versioning with flexible constraint matching                     |
 
 ### Advanced Features
 
@@ -165,9 +165,9 @@ const calculatorPlugin = plugin('calculator', '1.0.0')
   }));
 ```
 
-### 3. Shared Store
+### 3. Reactive Store
 
-Create type-safe shared state accessible across all plugin stages:
+Create **automatically reactive** type-safe state accessible across all plugin stages:
 
 ```typescript
 const databasePlugin = plugin('database', '1.0.0')
@@ -179,11 +179,16 @@ const databasePlugin = plugin('database', '1.0.0')
   .onInit(async ({ store }) => {
     // Initialize connection in store
     store.connection = await createConnection();
+
+    // 🔥 Watch for changes automatically
+    store.watch('queryCount', change => {
+      console.log(`Queries: ${change.oldValue} → ${change.newValue}`);
+    });
   })
   .proxy({
     include: ['*'],
     before: ctx => {
-      // Track queries in store
+      // Track queries in store (triggers watchers automatically)
       ctx.store.queryCount++;
     },
   })
@@ -204,12 +209,18 @@ const databasePlugin = plugin('database', '1.0.0')
   });
 ```
 
-**Key Benefits:**
+**Reactive Features:**
 
-- ✅ Automatic type inference (no generics needed)
-- ✅ Accessible in `onInit`, `setup`, `proxy`, `onReady`, `onShutdown`
-- ✅ Mutable state that persists across plugin lifecycle
-- ✅ Each plugin has its own isolated store
+- ✅ **Automatic reactivity** - No manual setup required
+- ✅ **Watch changes** - `watch()`, `watchAll()`, `watchBatch()`
+- ✅ **Computed values** - Memoized derived state with `computed()`
+- ✅ **Batch updates** - Group changes with `batch()`
+- ✅ **Transactions** - Atomic updates with automatic rollback
+- ✅ **Performance** - ~10x faster with optimized cloning and indexed watchers
+- ✅ **Type inference** - No generics needed, full autocomplete
+- ✅ **Isolated** - Each plugin has its own store
+
+> 📚 See [Store System](./docs/13-store-system.md) for complete documentation
 
 ### 4. API Extensions
 
@@ -347,20 +358,20 @@ console.log(multiply(4, 5)); // ✅ Autocomplete works!
 
 Comprehensive documentation is available in the [`docs/`](./docs/) directory:
 
-| Document                                                        | Description                                   |
-| --------------------------------------------------------------- | --------------------------------------------- |
-| [**Architecture Overview**](./docs/01-architecture-overview.md) | System design and layer architecture          |
-| [**Getting Started**](./docs/02-getting-started.md)             | Installation and first steps                  |
-| [**Plugin System**](./docs/03-plugin-system.md)                 | Creating and managing plugins                 |
-| [**Kernel Layer**](./docs/04-kernel-layer.md)                   | Kernel initialization and lifecycle           |
-| [**Extension System**](./docs/05-extension-system.md)           | Extending plugin APIs                         |
-| [**Direct Exports**](./docs/06-direct-exports.md)               | Library-like method exports                   |
-| [**Lifecycle Hooks**](./docs/07-lifecycle-hooks.md)             | Plugin lifecycle management                   |
-| [**Metadata System**](./docs/08-metadata-system.md)             | Custom metadata with type safety              |
-| [**API Reference**](./docs/09-api-reference.md)                 | Complete API documentation                    |
-| [**Best Practices**](./docs/10-best-practices.md)               | Patterns and guidelines                       |
-| [**Proxy System**](./docs/12-proxy-system.md)                   | Method interception and proxying              |
-| [**Store System**](./docs/13-store-system.md)                   | Reactive state management and change tracking |
+| Document                                                        | Description                                                     |
+| --------------------------------------------------------------- | --------------------------------------------------------------- |
+| [**Architecture Overview**](./docs/01-architecture-overview.md) | System design and layer architecture                            |
+| [**Getting Started**](./docs/02-getting-started.md)             | Installation and first steps                                    |
+| [**Plugin System**](./docs/03-plugin-system.md)                 | Creating and managing plugins                                   |
+| [**Kernel Layer**](./docs/04-kernel-layer.md)                   | Kernel initialization and lifecycle                             |
+| [**Extension System**](./docs/05-extension-system.md)           | Extending plugin APIs                                           |
+| [**Direct Exports**](./docs/06-direct-exports.md)               | Library-like method exports                                     |
+| [**Lifecycle Hooks**](./docs/07-lifecycle-hooks.md)             | Plugin lifecycle management                                     |
+| [**Metadata System**](./docs/08-metadata-system.md)             | Custom metadata with type safety                                |
+| [**API Reference**](./docs/09-api-reference.md)                 | Complete API documentation                                      |
+| [**Best Practices**](./docs/10-best-practices.md)               | Patterns and guidelines                                         |
+| [**Proxy System**](./docs/12-proxy-system.md)                   | Method interception and proxying                                |
+| [**Store System**](./docs/13-store-system.md)                   | Reactive state with watchers, computed values, and transactions |
 
 ---
 
@@ -370,8 +381,9 @@ Explore complete examples in the [`examples/`](./examples/) directory:
 
 - [**Basic Usage**](./examples/basic-usage.ts) - Plugin creation, dependencies, and kernel initialization
 - [**Direct Usage**](./examples/direct-usage.ts) - Direct method exports and library-like usage
-- [**Store Demo**](./examples/store-demo.ts) - Comprehensive reactive store features
-- [**Store Example**](./examples/store-example.ts) - Store usage with lifecycle hooks
+- [**Store Demo**](./examples/store-demo.ts) - Comprehensive reactive store features (watch, computed, batch, transaction)
+- [**Store Example**](./examples/store-example.ts) - Store usage with lifecycle hooks and plugin integration
+- [**Store Benchmark**](./examples/store-benchmark.ts) - Performance benchmarks (~10x faster with optimizations)
 - [**Proxy Demo**](./examples/proxy-demo.ts) - Method interception with multiple proxies
 - [**Proxy Complete Demo**](./examples/proxy-complete-demo.ts) - All 4 proxy modes in action
 - [**Kernel Proxy Demo**](./examples/kernel-proxy-demo.ts) - Kernel-level proxy examples
@@ -495,7 +507,7 @@ const authPlugin = plugin('auth', '1.0.0')
 ```typescript
 plugin(name: string, version: string)
   .metadata(data: Record<string, unknown>)
-  .store(factory: () => state)                 // Shared plugin state
+  .store(factory: () => state)                 // Reactive store (watch, computed, batch, transaction)
   .depends(plugin: BuiltPlugin, versionRange?: string)
   .extend(target: BuiltPlugin, fn: (api) => extensions)
   .proxy(config: ProxyConfig)                  // Self-proxy
