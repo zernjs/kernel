@@ -18,36 +18,21 @@ jobs:
       ${{ github.event.workflow_run.conclusion == 'success' &&
           github.event.workflow_run.head_branch == 'main' }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            package.json
-            dist/
-            artifacts/
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
       - name: Setup Node.js (npm registry)
         uses: actions/setup-node@v4
         with:
           node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
-          cache: 'pnpm'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Download package tarball from CI
-        uses: actions/download-artifact@v4
+        uses: dawidd6/action-download-artifact@v3
         with:
           name: package-tarball
           path: ./artifacts
-          repository: ${{ github.repository }}
-          run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: ci.yml
+          workflow_conclusion: success
+          run_id: ${{ github.event.workflow_run.id }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check if local version is greater than published
         id: version
