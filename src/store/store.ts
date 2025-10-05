@@ -178,10 +178,8 @@ function manualClone<T>(obj: T): T {
   }
 
   const cloned: any = {};
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      cloned[key] = manualClone((obj as any)[key]);
-    }
+  for (const key of Object.keys(obj)) {
+    cloned[key] = manualClone((obj as any)[key]);
   }
   return cloned;
 }
@@ -657,6 +655,15 @@ export function createStore<TStore extends Record<string, any>>(
         };
       }
 
+      if (prop === 'clearWatchers') {
+        return function clearWatchers(): void {
+          state.watchersByKey.clear();
+          state.allWatchers.clear();
+          state.batchWatchers.clear();
+          state.computedWatchers.clear();
+        };
+      }
+
       if (prop === '__store__') return true;
       if (prop === '__watchers__') {
         const all: Watcher[] = [];
@@ -676,6 +683,13 @@ export function createStore<TStore extends Record<string, any>>(
     },
 
     set(target: any, prop: string | symbol, value: any): boolean {
+      if (typeof prop === 'string') {
+        const DANGEROUS_KEYS = ['__proto__', 'constructor', 'prototype'];
+        if (DANGEROUS_KEYS.includes(prop)) {
+          throw new Error(`Cannot modify protected property: ${prop}`);
+        }
+      }
+
       if (typeof prop !== 'string') {
         target[prop] = value;
         return true;

@@ -9,6 +9,7 @@ import { createExtensionManager } from '@/extension';
 import { setGlobalKernel } from '@/hooks';
 import type { PluginsMap } from '@/utils/types';
 import type { ProxyConfig, ProxyMetadata } from '@/extension/proxy-types';
+import { validateProxyConfig } from '@/extension/proxy-types';
 
 export interface Kernel<TPlugins = Record<string, unknown>> {
   readonly id: KernelId;
@@ -158,6 +159,8 @@ class KernelBuilderImpl<
     if (config === undefined) {
       throw new Error('Kernel proxy requires a target and config');
     }
+
+    validateProxyConfig(config);
 
     if (targetOrSymbol === '**') {
       this.kernelProxies.push({

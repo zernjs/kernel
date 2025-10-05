@@ -75,15 +75,40 @@ export type ExtractMethodNames<TPlugin> = {
   [K in keyof TPlugin]: TPlugin[K] extends (...args: any[]) => any ? K : never;
 }[keyof TPlugin];
 
-export function matchesPattern(methodName: string, pattern: MethodPattern): boolean {
+export function matchesPattern(
+  methodName: string,
+  pattern: MethodPattern,
+  maxLength = 200
+): boolean {
+  if (typeof pattern === 'string' && pattern.length > maxLength) {
+    throw new Error(`Pattern too long: ${pattern.length} characters (max: ${maxLength})`);
+  }
+
+  if (methodName.length > maxLength) {
+    throw new Error(`Method name too long: ${methodName.length} characters (max: ${maxLength})`);
+  }
+
   if (pattern instanceof RegExp) {
     return pattern.test(methodName);
   }
 
-  const regexPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  const regexPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^.]*');
 
   const regex = new RegExp(`^${regexPattern}$`);
   return regex.test(methodName);
+}
+
+export function validateProxyConfig(config: ProxyConfig, maxLength = 200): void {
+  const patterns = [...(config.include || []), ...(config.exclude || [])];
+
+  for (const pattern of patterns) {
+    if (typeof pattern === 'string' && pattern.length > maxLength) {
+      throw new Error(
+        `Pattern too long: ${pattern.length} characters (max: ${maxLength}). ` +
+          `This prevents potential ReDoS attacks.`
+      );
+    }
+  }
 }
 
 export function shouldProxyMethod(methodName: string, config: ProxyConfig): boolean {

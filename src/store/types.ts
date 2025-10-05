@@ -225,6 +225,12 @@ export interface StoreMethods<TStore extends Record<string, any>> {
    */
   getMetrics?(): StoreMetrics;
 
+  /**
+   * Clear all registered watchers (use with caution)
+   * Useful for preventing memory leaks when cleaning up
+   */
+  clearWatchers(): void;
+
   // Internal properties (not for public use)
   readonly __store__: true;
   readonly __watchers__: Watcher[];

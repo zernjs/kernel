@@ -11,6 +11,7 @@ import type {
 import { createPluginId, createVersion } from '@/core';
 import type { DepsWithMetadata } from '@/utils/types';
 import type { ProxyConfig, ProxyMetadata, ProxyTarget } from '@/extension/proxy-types';
+import { validateProxyConfig } from '@/extension/proxy-types';
 import { createStore, isStore } from '@/store';
 import type { Store } from '@/store';
 
@@ -475,6 +476,9 @@ class PluginBuilderImpl<
     let targetPluginId: ProxyTarget;
     let config: ProxyConfig<TStore>;
 
+    const finalConfig = configOrUndefined === undefined ? targetOrConfig : configOrUndefined;
+    validateProxyConfig(finalConfig);
+
     if (configOrUndefined === undefined) {
       targetPluginId = 'self';
       config = targetOrConfig;
@@ -584,6 +588,8 @@ class BuiltPluginImpl<
   }
 
   proxy(config: ProxyConfig<TStore>): BuiltPlugin<TName, TApi, TExtMap, TMetadata, TStore> {
+    validateProxyConfig(config);
+
     const proxyMetadata: ProxyMetadata = {
       targetPluginId: 'self',
       config: config as any,

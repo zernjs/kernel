@@ -56,12 +56,11 @@ export class DependencyResolverImpl implements DependencyResolver {
 
   private detectCycles(plugins: readonly PluginMetadata[]): Result<void, CircularDependencyError> {
     const visited = new Set<PluginId>();
-    const recursionStack = new Set<PluginId>();
     const pluginMap = new Map(plugins.map(p => [p.id, p]));
 
     for (const plugin of plugins) {
       if (!visited.has(plugin.id)) {
-        const cycle = this.dfsDetectCycle(plugin.id, pluginMap, visited, recursionStack, []);
+        const cycle = this.dfsDetectCycleIterative(plugin.id, pluginMap, visited);
 
         if (cycle) {
           return failure(new CircularDependencyError(cycle));
@@ -72,39 +71,62 @@ export class DependencyResolverImpl implements DependencyResolver {
     return success(undefined);
   }
 
-  private dfsDetectCycle(
-    pluginId: PluginId,
+  private dfsDetectCycleIterative(
+    startPluginId: PluginId,
     pluginMap: Map<PluginId, PluginMetadata>,
-    visited: Set<PluginId>,
-    recursionStack: Set<PluginId>,
-    path: string[]
+    visited: Set<PluginId>
   ): string[] | null {
-    visited.add(pluginId);
-    recursionStack.add(pluginId);
+    const stack: Array<{
+      pluginId: PluginId;
+      path: string[];
+      depIndex: number;
+      phase: 'enter' | 'exit';
+    }> = [{ pluginId: startPluginId, path: [], depIndex: 0, phase: 'enter' }];
 
-    const plugin = pluginMap.get(pluginId);
-    if (!plugin) return null;
+    const recursionStack = new Set<PluginId>();
 
-    const currentPath = [...path, plugin.name];
+    while (stack.length > 0) {
+      const current = stack[stack.length - 1];
 
-    for (const dep of plugin.dependencies) {
+      if (current.phase === 'exit') {
+        recursionStack.delete(current.pluginId);
+        stack.pop();
+        continue;
+      }
+
+      if (current.depIndex === 0) {
+        visited.add(current.pluginId);
+        recursionStack.add(current.pluginId);
+      }
+
+      const plugin = pluginMap.get(current.pluginId);
+      if (!plugin) {
+        stack.pop();
+        continue;
+      }
+
+      const currentPath = [...current.path, plugin.name];
+
+      if (current.depIndex >= plugin.dependencies.length) {
+        current.phase = 'exit';
+        continue;
+      }
+
+      const dep = plugin.dependencies[current.depIndex];
+      current.depIndex++;
+
       if (!visited.has(dep.pluginId)) {
-        const cycle = this.dfsDetectCycle(
-          dep.pluginId,
-          pluginMap,
-          visited,
-          recursionStack,
-          currentPath
-        );
-
-        if (cycle) return cycle;
+        stack.push({
+          pluginId: dep.pluginId,
+          path: currentPath,
+          depIndex: 0,
+          phase: 'enter',
+        });
       } else if (recursionStack.has(dep.pluginId)) {
         const depPlugin = pluginMap.get(dep.pluginId);
         return [...currentPath, depPlugin?.name ?? dep.pluginId];
       }
     }
-
-    recursionStack.delete(pluginId);
 
     return null;
   }
