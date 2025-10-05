@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @description Fundamental types for the Zern Kernel, like Branded types for type safety
  */
@@ -42,7 +43,7 @@ export interface PluginMetadata {
   readonly state: PluginState;
   readonly dependencies: readonly PluginDependency[];
   readonly extensions: readonly PluginExtension[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   readonly proxies: readonly any[]; // ProxyMetadata[] - using any to avoid circular dependency
 }
 

@@ -64,6 +64,11 @@ export type ComputedSelector<TStore, TResult> = (store: TStore) => TResult;
 // ============================================================================
 
 /**
+ * Clone strategy for transactions
+ */
+export type CloneStrategy = 'structured' | 'manual';
+
+/**
  * Options for creating a store
  */
 export interface StoreOptions {
@@ -73,6 +78,18 @@ export interface StoreOptions {
   maxHistory?: number;
   /** Enable deep watching for nested objects/arrays */
   deep?: boolean;
+  /** Maximum number of watchers allowed (default: 1000) */
+  maxWatchers?: number;
+  /** Maximum number of watchers per key (default: 100) */
+  maxWatchersPerKey?: number;
+  /** Enable performance metrics collection (default: false) */
+  enableMetrics?: boolean;
+  /** Clone strategy for transactions (default: 'structured') */
+  cloneStrategy?: CloneStrategy;
+  /** Warn when high watcher count is reached (default: true) */
+  warnOnHighWatcherCount?: boolean;
+  /** Threshold for high watcher count warning (default: 100) */
+  warnThreshold?: number;
 }
 
 /**
@@ -82,6 +99,31 @@ export interface Watcher {
   key: string | symbol; // symbol for computed values
   callback: WatchCallback | WatchBatchCallback;
   type: 'key' | 'all' | 'batch' | 'computed';
+}
+
+/**
+ * Performance metrics for a store
+ */
+export interface StoreMetrics {
+  /** Total number of changes tracked */
+  totalChanges: number;
+  /** Total number of active watchers */
+  activeWatchers: number;
+  /** Watchers grouped by type */
+  watchersByType: {
+    key: number;
+    all: number;
+    batch: number;
+    computed: number;
+  };
+  /** Total number of computed values */
+  computedValues: number;
+  /** Number of history entries */
+  historySize: number;
+  /** Average notification time (ms) */
+  avgNotificationTime: number;
+  /** Peak watchers count */
+  peakWatchers: number;
 }
 
 /**
@@ -176,6 +218,12 @@ export interface StoreMethods<TStore extends Record<string, any>> {
    * Reset store to initial state (if history is enabled)
    */
   reset?(): void;
+
+  /**
+   * Get performance metrics (if metrics are enabled)
+   * @returns Current store metrics
+   */
+  getMetrics?(): StoreMetrics;
 
   // Internal properties (not for public use)
   readonly __store__: true;

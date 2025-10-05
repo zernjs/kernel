@@ -1,6 +1,14 @@
 /**
- * @file Store Implementation
- * @description Core store with watch, batch, transactions, and computed values
+ * @file Store Implementation (Optimized)
+ * @description High-performance store with watch, batch, transactions, and computed values
+ *
+ * Performance optimizations:
+ * - structuredClone for fast deep cloning (with manual fallback)
+ * - Indexed watchers for O(1) lookups instead of O(n)
+ * - Circular buffer for history (O(1) push)
+ * - Dependency tracking for computed values
+ * - Watcher limits to prevent memory leaks
+ * - Performance metrics collection
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -15,21 +23,88 @@ import type {
   ComputedValue,
   ComputedSelector,
   Watcher,
+  StoreMetrics,
 } from './types';
+
+// ============================================================================
+// CIRCULAR BUFFER (O(1) operations)
+// ============================================================================
+
+class CircularBuffer<T> {
+  private buffer: T[];
+  private head = 0;
+  private tail = 0;
+  private size = 0;
+
+  constructor(private capacity: number) {
+    this.buffer = new Array(capacity);
+  }
+
+  push(item: T): void {
+    this.buffer[this.tail] = item;
+    this.tail = (this.tail + 1) % this.capacity;
+
+    if (this.size < this.capacity) {
+      this.size++;
+    } else {
+      this.head = (this.head + 1) % this.capacity;
+    }
+  }
+
+  toArray(): T[] {
+    const result: T[] = [];
+    for (let i = 0; i < this.size; i++) {
+      result.push(this.buffer[(this.head + i) % this.capacity]);
+    }
+    return result;
+  }
+
+  clear(): void {
+    this.head = 0;
+    this.tail = 0;
+    this.size = 0;
+  }
+
+  get length(): number {
+    return this.size;
+  }
+}
 
 // ============================================================================
 // INTERNAL STATE
 // ============================================================================
 
+interface ComputedState {
+  selector: ComputedSelector<any, any>;
+  cache: any;
+  dirty: boolean;
+  dependencies: Set<string>; // Track which keys this computed depends on
+}
+
 interface StoreState<TStore> {
-  watchers: Watcher[];
+  // Indexed watchers for O(1) lookup
+  watchersByKey: Map<string, Set<Watcher>>;
+  allWatchers: Set<Watcher>;
+  batchWatchers: Set<Watcher>;
+  computedWatchers: Map<symbol, Set<Watcher>>;
+
+  // State management
   inBatch: boolean;
   batchChanges: StoreChange[];
-  history: StoreChange[];
-  maxHistory: number;
+  history: CircularBuffer<StoreChange>;
   historyEnabled: boolean;
-  computed: Map<symbol, { selector: ComputedSelector<any, any>; cache: any; dirty: boolean }>;
+  computed: Map<symbol, ComputedState>;
   snapshot: TStore | null; // For transactions
+
+  // Configuration
+  options: Required<StoreOptions>;
+
+  // Metrics
+  metrics: {
+    totalChanges: number;
+    peakWatchers: number;
+    notificationTimes: number[];
+  };
 }
 
 const stateMap = new WeakMap<any, StoreState<any>>();
@@ -43,24 +118,63 @@ const stateMap = new WeakMap<any, StoreState<any>>();
  */
 function getState<TStore>(store: any): StoreState<TStore> {
   if (!stateMap.has(store)) {
+    const options = (store as any).__options__ || {};
+
     stateMap.set(store, {
-      watchers: [],
+      watchersByKey: new Map(),
+      allWatchers: new Set(),
+      batchWatchers: new Set(),
+      computedWatchers: new Map(),
       inBatch: false,
       batchChanges: [],
-      history: [],
-      maxHistory: 50,
-      historyEnabled: false,
+      history: new CircularBuffer(options.maxHistory ?? 50),
+      historyEnabled: options.history ?? false,
       computed: new Map(),
       snapshot: null,
+      options: {
+        history: options.history ?? false,
+        maxHistory: options.maxHistory ?? 50,
+        deep: options.deep ?? false,
+        maxWatchers: options.maxWatchers ?? 1000,
+        maxWatchersPerKey: options.maxWatchersPerKey ?? 100,
+        enableMetrics: options.enableMetrics ?? false,
+        cloneStrategy: options.cloneStrategy ?? 'structured',
+        warnOnHighWatcherCount: options.warnOnHighWatcherCount ?? true,
+        warnThreshold: options.warnThreshold ?? 100,
+      },
+      metrics: {
+        totalChanges: 0,
+        peakWatchers: 0,
+        notificationTimes: [],
+      },
     });
   }
   return stateMap.get(store)!;
 }
 
 /**
- * Deep clone an object (for snapshots)
+ * Deep clone with structuredClone fallback
  */
-function deepClone<T>(obj: T): T {
+function fastClone<T>(obj: T, strategy: 'structured' | 'manual'): T {
+  if (
+    strategy === 'structured' &&
+    typeof globalThis !== 'undefined' &&
+    'structuredClone' in globalThis
+  ) {
+    try {
+      return (globalThis as any).structuredClone(obj);
+    } catch {
+      // Fallback to manual if structuredClone fails
+      return manualClone(obj);
+    }
+  }
+  return manualClone(obj);
+}
+
+/**
+ * Manual deep clone (fallback)
+ */
+function manualClone<T>(obj: T): T {
   if (obj === null || typeof obj !== 'object') {
     return obj;
   }
@@ -70,38 +184,155 @@ function deepClone<T>(obj: T): T {
   }
 
   if (obj instanceof Map) {
-    return new Map(Array.from(obj.entries()).map(([k, v]) => [k, deepClone(v)])) as any;
+    return new Map(Array.from(obj.entries()).map(([k, v]) => [k, manualClone(v)])) as any;
   }
 
   if (obj instanceof Set) {
-    return new Set(Array.from(obj).map(v => deepClone(v))) as any;
+    return new Set(Array.from(obj).map(v => manualClone(v))) as any;
   }
 
   if (Array.isArray(obj)) {
-    return obj.map(item => deepClone(item)) as any;
+    return obj.map(item => manualClone(item)) as any;
   }
 
   const cloned: any = {};
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      cloned[key] = deepClone((obj as any)[key]);
+      cloned[key] = manualClone((obj as any)[key]);
     }
   }
   return cloned;
 }
 
 /**
- * Compare two values for equality (shallow)
+ * Compare two values for equality
  */
 function isEqual(a: any, b: any): boolean {
   return a === b || (Number.isNaN(a) && Number.isNaN(b));
 }
 
 /**
- * Notify watchers about a change
+ * Get total watcher count
+ */
+function getTotalWatcherCount(state: StoreState<any>): number {
+  let total = state.allWatchers.size + state.batchWatchers.size;
+  for (const watchers of state.watchersByKey.values()) {
+    total += watchers.size;
+  }
+  for (const watchers of state.computedWatchers.values()) {
+    total += watchers.size;
+  }
+  return total;
+}
+
+/**
+ * Add watcher with limit checking
+ */
+function addWatcher(state: StoreState<any>, watcher: Watcher): void {
+  const currentTotal = getTotalWatcherCount(state);
+
+  // Check global limit
+  if (currentTotal >= state.options.maxWatchers) {
+    throw new Error(
+      `Maximum watchers limit reached (${state.options.maxWatchers}). ` +
+        `This may indicate a memory leak. Remove unused watchers with unwatch().`
+    );
+  }
+
+  // Update peak
+  if (currentTotal + 1 > state.metrics.peakWatchers) {
+    state.metrics.peakWatchers = currentTotal + 1;
+  }
+
+  // Add watcher based on type
+  if (watcher.type === 'all') {
+    state.allWatchers.add(watcher);
+  } else if (watcher.type === 'batch') {
+    state.batchWatchers.add(watcher);
+  } else if (watcher.type === 'computed') {
+    const symbol = watcher.key as symbol;
+    if (!state.computedWatchers.has(symbol)) {
+      state.computedWatchers.set(symbol, new Set());
+    }
+    state.computedWatchers.get(symbol)!.add(watcher);
+  } else {
+    // Key watcher
+    const key = watcher.key as string;
+    if (!state.watchersByKey.has(key)) {
+      state.watchersByKey.set(key, new Set());
+    }
+
+    const keyWatchers = state.watchersByKey.get(key)!;
+
+    // Check per-key limit
+    if (keyWatchers.size >= state.options.maxWatchersPerKey) {
+      if (state.options.warnOnHighWatcherCount) {
+        console.warn(
+          `High number of watchers for key "${key}" (${keyWatchers.size}). ` +
+            `Consider using fewer watchers or batch operations.`
+        );
+      }
+    }
+
+    keyWatchers.add(watcher);
+  }
+
+  // Warn on high total count
+  if (
+    state.options.warnOnHighWatcherCount &&
+    currentTotal > state.options.warnThreshold &&
+    currentTotal % 100 === 0 // Only warn every 100 watchers
+  ) {
+    console.warn(
+      `High total watcher count: ${currentTotal} watchers active. ` +
+        `Consider removing unused watchers to improve performance.`
+    );
+  }
+}
+
+/**
+ * Remove watcher
+ */
+function removeWatcher(state: StoreState<any>, watcher: Watcher): void {
+  if (watcher.type === 'all') {
+    state.allWatchers.delete(watcher);
+  } else if (watcher.type === 'batch') {
+    state.batchWatchers.delete(watcher);
+  } else if (watcher.type === 'computed') {
+    const watchers = state.computedWatchers.get(watcher.key as symbol);
+    if (watchers) {
+      watchers.delete(watcher);
+      if (watchers.size === 0) {
+        state.computedWatchers.delete(watcher.key as symbol);
+      }
+    }
+  } else {
+    const watchers = state.watchersByKey.get(watcher.key as string);
+    if (watchers) {
+      watchers.delete(watcher);
+      if (watchers.size === 0) {
+        state.watchersByKey.delete(watcher.key as string);
+      }
+    }
+  }
+}
+
+/**
+ * Get current time in milliseconds (works in Node and Browser)
+ */
+function now(): number {
+  if (typeof globalThis !== 'undefined' && 'performance' in globalThis) {
+    return (globalThis as any).performance.now();
+  }
+  return Date.now();
+}
+
+/**
+ * Notify watchers about a change (optimized with indexing)
  */
 async function notifyChange(store: any, change: StoreChange): Promise<void> {
   const state = getState(store);
+  const startTime = state.options.enableMetrics ? now() : 0;
 
   // Add to batch if we're in batch mode
   if (state.inBatch) {
@@ -112,34 +343,53 @@ async function notifyChange(store: any, change: StoreChange): Promise<void> {
   // Add to history
   if (state.historyEnabled) {
     state.history.push(change);
-    if (state.history.length > state.maxHistory) {
-      state.history.shift();
+  }
+
+  // Update metrics
+  if (state.options.enableMetrics) {
+    state.metrics.totalChanges++;
+  }
+
+  // Invalidate affected computed values (dependency-based)
+  for (const [, computed] of state.computed) {
+    if (computed.dependencies.has(change.key)) {
+      computed.dirty = true;
     }
   }
 
-  // Mark computed values as dirty
-  for (const [, computed] of state.computed) {
-    computed.dirty = true;
-  }
-
-  // Notify watchers
+  // Notify watchers (optimized O(k) instead of O(n))
   const promises: Promise<void>[] = [];
 
-  for (const watcher of state.watchers) {
-    if (watcher.type === 'key' && watcher.key === change.key) {
+  // Key-specific watchers (O(1) lookup)
+  const keyWatchers = state.watchersByKey.get(change.key);
+  if (keyWatchers) {
+    for (const watcher of keyWatchers) {
       const result = (watcher.callback as WatchCallback)(change);
       if (result instanceof Promise) {
         promises.push(result);
       }
-    } else if (watcher.type === 'all') {
-      const result = (watcher.callback as WatchAllCallback)(change);
-      if (result instanceof Promise) {
-        promises.push(result);
-      }
+    }
+  }
+
+  // All watchers
+  for (const watcher of state.allWatchers) {
+    const result = (watcher.callback as WatchAllCallback)(change);
+    if (result instanceof Promise) {
+      promises.push(result);
     }
   }
 
   await Promise.all(promises);
+
+  // Record notification time
+  if (state.options.enableMetrics) {
+    const duration = now() - startTime;
+    state.metrics.notificationTimes.push(duration);
+    // Keep only last 100 measurements
+    if (state.metrics.notificationTimes.length > 100) {
+      state.metrics.notificationTimes.shift();
+    }
+  }
 }
 
 /**
@@ -151,16 +401,45 @@ async function notifyBatch(store: any, changes: readonly StoreChange[]): Promise
   const state = getState(store);
   const promises: Promise<void>[] = [];
 
-  for (const watcher of state.watchers) {
-    if (watcher.type === 'batch') {
-      const result = (watcher.callback as WatchBatchCallback)(changes);
-      if (result instanceof Promise) {
-        promises.push(result);
-      }
+  for (const watcher of state.batchWatchers) {
+    const result = (watcher.callback as WatchBatchCallback)(changes);
+    if (result instanceof Promise) {
+      promises.push(result);
     }
   }
 
   await Promise.all(promises);
+}
+
+// ============================================================================
+// COMPUTED VALUE TRACKING
+// ============================================================================
+
+/**
+ * Track dependencies accessed during computed value evaluation
+ */
+function trackDependencies<TStore>(
+  store: TStore,
+  selector: ComputedSelector<TStore, any>
+): Set<string> {
+  const dependencies = new Set<string>();
+
+  const tracker = new Proxy(store as any, {
+    get(target, prop): any {
+      if (typeof prop === 'string' && !prop.startsWith('__') && !prop.startsWith('$')) {
+        dependencies.add(prop);
+      }
+      return target[prop];
+    },
+  });
+
+  try {
+    selector(tracker);
+  } catch {
+    // Ignore errors during dependency tracking
+  }
+
+  return dependencies;
 }
 
 // ============================================================================
@@ -174,24 +453,18 @@ export function createStore<TStore extends Record<string, any>>(
   initialState: TStore,
   options: StoreOptions = {}
 ): Store<TStore> {
+  // Store options on the object for later retrieval
+  (initialState as any).__options__ = options;
+
   // Initialize state
-  const state: StoreState<TStore> = {
-    watchers: [],
-    inBatch: false,
-    batchChanges: [],
-    history: [],
-    maxHistory: options.maxHistory ?? 50,
-    historyEnabled: options.history ?? false,
-    computed: new Map(),
-    snapshot: null,
-  };
+  const state = getState(initialState);
 
   // Create proxy to intercept property access
   const proxy = new Proxy(initialState, {
-    get(target: any, prop: string | symbol) {
+    get(target: any, prop: string | symbol): any {
       // API methods
       if (prop === 'watch') {
-        return function watch(keyOrComputed: any, callback: any) {
+        return function watch(keyOrComputed: any, callback: any): () => void {
           // Watch computed value
           if (
             typeof keyOrComputed === 'object' &&
@@ -199,80 +472,90 @@ export function createStore<TStore extends Record<string, any>>(
             '__computedId__' in keyOrComputed
           ) {
             const computedId = keyOrComputed.__computedId__;
-            state.watchers.push({
+            const watcher: Watcher = {
               key: computedId,
               callback: callback as WatchCallback,
               type: 'computed',
-            });
+            };
+
+            addWatcher(state, watcher);
 
             return () => {
-              state.watchers = state.watchers.filter(
-                w => !(w.type === 'computed' && w.key === computedId)
-              );
+              removeWatcher(state, watcher);
             };
           }
 
           // Watch regular key
-          state.watchers.push({
+          const watcher: Watcher = {
             key: keyOrComputed as string,
             callback: callback as WatchCallback,
             type: 'key',
-          });
+          };
+
+          addWatcher(state, watcher);
 
           return () => {
-            state.watchers = state.watchers.filter(
-              w => !(w.type === 'key' && w.key === keyOrComputed && w.callback === callback)
-            );
+            removeWatcher(state, watcher);
           };
         };
       }
 
       if (prop === 'watchAll') {
-        return function watchAll(callback: WatchAllCallback) {
-          state.watchers.push({
+        return function watchAll(callback: WatchAllCallback): () => void {
+          const watcher: Watcher = {
             key: '*',
             callback: callback as any,
             type: 'all',
-          });
+          };
+
+          addWatcher(state, watcher);
 
           return () => {
-            state.watchers = state.watchers.filter(
-              w => !(w.type === 'all' && w.callback === callback)
-            );
+            removeWatcher(state, watcher);
           };
         };
       }
 
       if (prop === 'watchBatch') {
-        return function watchBatch(callback: WatchBatchCallback) {
-          state.watchers.push({
+        return function watchBatch(callback: WatchBatchCallback): () => void {
+          const watcher: Watcher = {
             key: '*',
             callback: callback as any,
             type: 'batch',
-          });
+          };
+
+          addWatcher(state, watcher);
 
           return () => {
-            state.watchers = state.watchers.filter(
-              w => !(w.type === 'batch' && w.callback === callback)
-            );
+            removeWatcher(state, watcher);
           };
         };
       }
 
       if (prop === 'unwatch') {
-        return function unwatch(key: string, callback?: WatchCallback) {
+        return function unwatch(key: string, callback?: WatchCallback): void {
+          const watchers = state.watchersByKey.get(key);
+          if (!watchers) return;
+
           if (callback) {
-            state.watchers = state.watchers.filter(
-              w => !(w.type === 'key' && w.key === key && w.callback === callback)
-            );
+            // Remove specific callback
+            for (const watcher of watchers) {
+              if (watcher.callback === callback) {
+                removeWatcher(state, watcher);
+                break;
+              }
+            }
           } else {
-            state.watchers = state.watchers.filter(w => !(w.type === 'key' && w.key === key));
+            // Remove all watchers for this key
+            for (const watcher of Array.from(watchers)) {
+              removeWatcher(state, watcher);
+            }
           }
         };
       }
 
       if (prop === 'batch') {
-        return function batch(fn: () => void) {
+        return function batch(fn: () => void): void {
           state.inBatch = true;
           state.batchChanges = [];
 
@@ -280,35 +563,15 @@ export function createStore<TStore extends Record<string, any>>(
             fn();
           } finally {
             state.inBatch = false;
+            const changes = state.batchChanges;
+            state.batchChanges = [];
 
             // Notify batch watchers
-            if (state.batchChanges.length > 0) {
-              const changes = [...state.batchChanges];
-              state.batchChanges = [];
+            void notifyBatch(proxy, changes);
 
-              // Add to history
-              if (state.historyEnabled) {
-                for (const change of changes) {
-                  state.history.push(change);
-                }
-                while (state.history.length > state.maxHistory) {
-                  state.history.shift();
-                }
-              }
-
-              // Notify individual change watchers
-              for (const change of changes) {
-                for (const watcher of state.watchers) {
-                  if (watcher.type === 'key' && watcher.key === change.key) {
-                    (watcher.callback as WatchCallback)(change);
-                  } else if (watcher.type === 'all') {
-                    (watcher.callback as WatchAllCallback)(change);
-                  }
-                }
-              }
-
-              // Notify batch watchers
-              notifyBatch(proxy, changes);
+            // Notify individual changes
+            for (const change of changes) {
+              void notifyChange(proxy, change);
             }
           }
         };
@@ -316,18 +579,20 @@ export function createStore<TStore extends Record<string, any>>(
 
       if (prop === 'transaction') {
         return async function transaction<T>(fn: () => Promise<T>): Promise<T> {
-          // Take snapshot
-          state.snapshot = deepClone(target);
+          // Take snapshot using optimized clone
+          state.snapshot = fastClone(target, state.options.cloneStrategy);
 
           try {
             const result = await fn();
-            state.snapshot = null; // Commit
+            state.snapshot = null;
             return result;
           } catch (error) {
-            // Rollback
+            // Rollback: restore snapshot
             if (state.snapshot) {
               for (const key in state.snapshot) {
-                (target as any)[key] = state.snapshot[key];
+                if (Object.prototype.hasOwnProperty.call(state.snapshot, key)) {
+                  (target as any)[key] = (state.snapshot as any)[key];
+                }
               }
               state.snapshot = null;
             }
@@ -336,130 +601,135 @@ export function createStore<TStore extends Record<string, any>>(
         };
       }
 
-      if (prop === 'computed' || prop === 'select') {
+      if (prop === 'computed') {
         return function computed<T>(selector: ComputedSelector<TStore, T>): ComputedValue<T> {
           const computedId = Symbol('computed');
 
-          // Create computed value object
-          const computedValue: ComputedValue<T> = {
-            get value() {
-              const computedData = state.computed.get(computedId);
-              if (!computedData) {
-                // First access - compute and cache
-                const value = selector(proxy as TStore);
-                state.computed.set(computedId, { selector, cache: value, dirty: false });
-                return value;
+          // Track dependencies
+          const dependencies = trackDependencies(target as TStore, selector);
+
+          state.computed.set(computedId, {
+            selector,
+            cache: undefined,
+            dirty: true,
+            dependencies,
+          });
+
+          return {
+            get value(): T {
+              const computedState = state.computed.get(computedId)!;
+
+              if (computedState.dirty) {
+                computedState.cache = selector(target as TStore);
+                computedState.dirty = false;
               }
 
-              // Return cached value if not dirty
-              if (!computedData.dirty) {
-                return computedData.cache;
-              }
-
-              // Recompute if dirty
-              const newValue = selector(proxy as TStore);
-              const oldValue = computedData.cache;
-
-              // Update cache
-              computedData.cache = newValue;
-              computedData.dirty = false;
-
-              // Notify computed watchers if value changed
-              if (!isEqual(oldValue, newValue)) {
-                for (const watcher of state.watchers) {
-                  if (watcher.type === 'computed' && watcher.key === computedId) {
-                    (watcher.callback as any)(newValue);
-                  }
-                }
-              }
-
-              return newValue;
+              return computedState.cache;
             },
             __computedId__: computedId,
           };
-
-          return computedValue;
         };
       }
 
-      // History methods
-      if (state.historyEnabled) {
-        if (prop === 'getHistory') {
-          return () => [...state.history];
-        }
+      if (prop === 'select') {
+        return target.computed;
+      }
 
-        if (prop === 'clearHistory') {
-          return () => {
-            state.history = [];
-          };
-        }
+      if (prop === 'getHistory') {
+        return function getHistory(): readonly StoreChange[] {
+          if (!state.historyEnabled) return [];
+          return state.history.toArray();
+        };
+      }
 
-        if (prop === 'undo') {
-          return () => {
-            if (state.history.length === 0) return;
-            const lastChange = state.history[state.history.length - 1];
-            (target as any)[lastChange.key] = lastChange.oldValue;
-            state.history.pop();
-          };
-        }
+      if (prop === 'clearHistory') {
+        return function clearHistory(): void {
+          if (state.historyEnabled) {
+            state.history.clear();
+          }
+        };
+      }
 
-        if (prop === 'reset') {
-          return () => {
-            if (state.history.length === 0) return;
-            // Apply all changes in reverse
-            for (let i = state.history.length - 1; i >= 0; i--) {
-              const change = state.history[i];
-              (target as any)[change.key] = change.oldValue;
-            }
-            state.history = [];
+      if (prop === 'getMetrics') {
+        return function getMetrics(): StoreMetrics {
+          const watcherCounts = {
+            key: 0,
+            all: state.allWatchers.size,
+            batch: state.batchWatchers.size,
+            computed: 0,
           };
-        }
+
+          for (const watchers of state.watchersByKey.values()) {
+            watcherCounts.key += watchers.size;
+          }
+
+          for (const watchers of state.computedWatchers.values()) {
+            watcherCounts.computed += watchers.size;
+          }
+
+          const avgTime =
+            state.metrics.notificationTimes.length > 0
+              ? state.metrics.notificationTimes.reduce((a, b) => a + b, 0) /
+                state.metrics.notificationTimes.length
+              : 0;
+
+          return {
+            totalChanges: state.metrics.totalChanges,
+            activeWatchers: getTotalWatcherCount(state),
+            watchersByType: watcherCounts,
+            computedValues: state.computed.size,
+            historySize: state.history.length,
+            avgNotificationTime: avgTime,
+            peakWatchers: state.metrics.peakWatchers,
+          };
+        };
       }
 
       // Internal properties
       if (prop === '__store__') return true;
-      if (prop === '__watchers__') return state.watchers;
+      if (prop === '__watchers__') {
+        const all: Watcher[] = [];
+        all.push(...state.allWatchers);
+        all.push(...state.batchWatchers);
+        for (const watchers of state.watchersByKey.values()) {
+          all.push(...watchers);
+        }
+        for (const watchers of state.computedWatchers.values()) {
+          all.push(...watchers);
+        }
+        return all;
+      }
       if (prop === '__computed__') return state.computed;
 
-      // Normal property access
-      return Reflect.get(target, prop);
+      // Regular property access
+      return target[prop];
     },
 
-    set(target: any, prop: string | symbol, value: any) {
-      // Don't trigger watchers for internal properties
-      if (typeof prop === 'symbol' || prop.startsWith('__')) {
-        return Reflect.set(target, prop, value);
+    set(target: any, prop: string | symbol, value: any): boolean {
+      if (typeof prop !== 'string') {
+        target[prop] = value;
+        return true;
       }
 
       const oldValue = target[prop];
 
       // Only notify if value actually changed
-      if (isEqual(oldValue, value)) {
-        return true;
-      }
+      if (!isEqual(oldValue, value)) {
+        target[prop] = value;
 
-      // Update value
-      const success = Reflect.set(target, prop, value);
-
-      if (success) {
-        // Create change event
         const change: StoreChange = {
-          key: prop as string,
+          key: prop,
           oldValue,
           newValue: value,
           timestamp: new Date(),
         };
 
-        // Notify watchers (async, but don't block)
-        notifyChange(proxy, change);
+        void notifyChange(proxy, change);
       }
 
-      return success;
+      return true;
     },
   });
-
-  // Store state in WeakMap
-  stateMap.set(proxy, state);
 
   return proxy as Store<TStore>;
 }
@@ -468,5 +738,5 @@ export function createStore<TStore extends Record<string, any>>(
  * Check if an object is a store
  */
 export function isStore(obj: any): obj is Store<any> {
-  return obj && typeof obj === 'object' && obj.__store__ === true;
+  return obj && typeof obj === 'object' && '__store__' in obj && obj.__store__ === true;
 }

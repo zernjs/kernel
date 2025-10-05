@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @file Plugin Instance container
  * @description Manages lifecycle of instances

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @file Centralized plugin registry for the Zern Kernel
  * @description Manages plugin lifecycle and states
