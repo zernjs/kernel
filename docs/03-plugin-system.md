@@ -315,6 +315,56 @@ const monitorPlugin = plugin('monitor', '1.0.0')
 
 For complete documentation, see [Proxy System](./12-proxy-system.md).
 
+### `.config(options)` - Configure Plugin Behavior
+
+Configure plugin-specific settings including error handling.
+
+```typescript
+interface PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore> {
+  config(
+    config: { errors?: ErrorConfig } & Record<string, unknown>
+  ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
+}
+```
+
+**Example:**
+
+```typescript
+const mathPlugin = plugin('math', '1.0.0')
+  .config({
+    // Error handling config
+    errors: {
+      showSolutions: true,
+      severity: ErrorSeverity.WARN,
+    },
+    // Custom plugin config
+    precision: 2,
+    enableLogging: true,
+  })
+  .setup(() => ({
+    add: (a: number, b: number) => a + b,
+  }));
+```
+
+**Available Error Options:**
+
+```typescript
+interface ErrorConfig {
+  captureStackTrace?: boolean;
+  stackTraceLimit?: number;
+  filterInternalFrames?: boolean;
+  enableColors?: boolean;
+  showContext?: boolean;
+  showSolutions?: boolean;
+  showTimestamp?: boolean;
+  severity?: ErrorSeverity; // Default severity for this plugin
+}
+```
+
+For complete error handling documentation, see [Error Handling](./14-error-handling.md).
+
+---
+
 ### `.metadata(data)` - Attach Custom Metadata
 
 Add custom metadata to your plugin that can be accessed in lifecycle hooks and dependency contexts.

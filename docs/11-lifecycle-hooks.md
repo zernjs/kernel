@@ -200,7 +200,7 @@ await kernel.shutdown(); // Triggers onShutdown hooks
 
 ## onError Hook
 
-Executes when plugin initialization **fails**.
+Executes when **any error occurs** in the plugin - during initialization, setup, lifecycle hooks, or runtime method calls.
 
 ### Signature
 
@@ -210,26 +210,113 @@ onError(
 ): PluginBuilder
 ```
 
-### Example
+### Error Context
+
+The context includes a `phase` field indicating where the error occurred:
+
+```typescript
+interface LifecycleHookContext {
+  pluginName: string;
+  pluginId: PluginId;
+  kernel: KernelContext;
+  plugins: TDeps;
+  store: Store<TStore>;
+
+  phase: 'init' | 'setup' | 'ready' | 'shutdown' | 'runtime';
+  method?: string; // Present when phase === 'runtime'
+}
+```
+
+### Examples
+
+#### Capturing Initialization Errors
 
 ```typescript
 const apiPlugin = plugin('api', '1.0.0')
-  .onError((error, { pluginName }) => {
-    console.error(`[${pluginName}] Initialization failed:`, error.message);
-    // Send to error tracking service
-    trackError({ plugin: pluginName, error });
+  .onError((error, { pluginName, phase }) => {
+    if (phase === 'init' || phase === 'setup') {
+      console.error(`[${pluginName}] Initialization failed:`, error.message);
+      trackError({ plugin: pluginName, error });
+    }
   })
   .setup(() => {
     throw new Error('API initialization failed!');
   });
 ```
 
+#### Capturing Runtime Errors
+
+```typescript
+const userPlugin = plugin('user', '1.0.0')
+  .setup(() => ({
+    getUser: (id: string) => {
+      if (!users.has(id)) {
+        throw new UserNotFoundError(id);
+      }
+      return users.get(id);
+    },
+  }))
+  .onError((error, { phase, method }) => {
+    // ✅ Captures errors from method calls!
+    if (phase === 'runtime') {
+      console.error(`[${method}] Runtime error:`, error.message);
+
+      // Track which methods are failing
+      metrics.increment('method_errors', {
+        plugin: 'user',
+        method,
+      });
+    }
+  });
+
+// Later, when calling methods:
+const user = kernel.get('user');
+user.getUser('invalid-id'); // Triggers onError with phase='runtime', method='getUser'
+```
+
+#### Comprehensive Error Handling
+
+```typescript
+const databasePlugin = plugin('database', '1.0.0')
+  .setup(() => ({
+    query: async (sql: string) => {
+      // This error will be caught by onError
+      throw new QueryError(sql);
+    },
+  }))
+  .onError((error, ctx) => {
+    // Handle all error types
+    switch (ctx.phase) {
+      case 'init':
+        console.error(`[INIT] ${error.message}`);
+        notifyAdmins('Database init failed');
+        break;
+
+      case 'runtime':
+        console.error(`[${ctx.method}] Query failed:`, error.message);
+        logger.error({
+          plugin: ctx.pluginName,
+          method: ctx.method,
+          error: error.message,
+        });
+        break;
+
+      case 'shutdown':
+        console.error(`[SHUTDOWN] Cleanup failed:`, error.message);
+        break;
+    }
+  });
+```
+
 ### Use Cases
 
-- ✅ Logging errors
-- ✅ Sending to error tracking services
+- ✅ Logging errors from any phase
+- ✅ Sending to error tracking services (Sentry, Datadog, etc.)
+- ✅ Tracking method-level failures
 - ✅ Recovery attempts
 - ✅ Notifying administrators
+- ✅ Collecting error metrics
+- ✅ Custom error handling per plugin
 
 ---
 
@@ -516,7 +603,7 @@ await createKernel().use(myPlugin).start(); // ✅ Hooks will run
 ```typescript
 await createKernel()
   .use(myPlugin)
-  .withConfig({
+  .config({
     initializationTimeout: 60000, // 60 seconds
   })
   .start();

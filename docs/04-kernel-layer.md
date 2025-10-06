@@ -34,7 +34,7 @@ const kernel = await createKernel().use(mathPlugin).use(calculatorPlugin).start(
 const kernel = await createKernel()
   .use(mathPlugin)
   .use(calculatorPlugin)
-  .withConfig({
+  .config({
     autoGlobal: true,
     strictVersioning: true,
     logLevel: 'debug',
@@ -83,11 +83,11 @@ const kernel = await createKernel()
 - Each `.use()` refines the kernel's type with the new plugin
 - Plugins are not initialized until `.start()` is called
 
-### `.withConfig(config)` - Configure Kernel
+### `.config(config)` - Configure Kernel
 
 ```typescript
 interface KernelBuilder<U> {
-  withConfig(config: Partial<KernelConfig>): KernelBuilder<U>;
+  config(config: Partial<KernelConfig>): KernelBuilder<U>;
 }
 ```
 
@@ -101,19 +101,28 @@ interface KernelBuilder<U> {
 | `initializationTimeout` | `number`                                 | `30000`  | Max initialization time in ms          |
 | `extensionsEnabled`     | `boolean`                                | `true`   | Enable API extensions and proxies      |
 | `logLevel`              | `'debug' \| 'info' \| 'warn' \| 'error'` | `'info'` | Logging verbosity                      |
+| `errors`                | `ErrorConfig`                            | `{}`     | Error handling configuration           |
 
 **Example:**
 
 ```typescript
 const kernel = await createKernel()
   .use(mathPlugin)
-  .withConfig({
+  .config({
     autoGlobal: false, // Don't register globally
     logLevel: 'debug', // Verbose logging
     strictVersioning: false, // Allow looser version matching
+    errors: {
+      captureStackTrace: true,
+      showSolutions: true,
+    },
   })
   .start();
 ```
+
+**Error Handling Configuration:**
+
+See [Error Handling](./14-error-handling.md) for complete documentation on error configuration options.
 
 ### `.build()` - Build Without Starting
 
@@ -526,7 +535,7 @@ const config: Partial<KernelConfig> = {
   strictVersioning: true,
 };
 
-const kernel = await createKernel().use(mathPlugin).withConfig(config).start();
+const kernel = await createKernel().use(mathPlugin).config(config).start();
 ```
 
 ❌ **Bad:**
@@ -534,7 +543,7 @@ const kernel = await createKernel().use(mathPlugin).withConfig(config).start();
 ```typescript
 const kernel = await createKernel()
   .use(mathPlugin)
-  .withConfig({
+  .config({
     logLevel: 'verbose', // ❌ Not a valid level
     unknownOption: true, // ❌ Not a valid option
   } as any)

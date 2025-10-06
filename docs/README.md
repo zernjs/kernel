@@ -14,7 +14,7 @@ Welcome to the Zern Kernel documentation! This comprehensive guide will help you
 
 ### Core Layers
 
-1. [**Core Layer**](./02-core-layer.md) - Fundamental types, error handling, and the Result pattern
+1. [**Core Layer**](./02-core-layer.md) - Fundamental types and the Result pattern
 2. [**Plugin System**](./03-plugin-system.md) - Creating, building, and managing plugins
 3. [**Kernel Layer**](./04-kernel-layer.md) - Kernel initialization, lifecycle, and container management
 4. [**Extension System**](./05-extension-system.md) - Extending plugin APIs with new methods
@@ -29,6 +29,7 @@ Welcome to the Zern Kernel documentation! This comprehensive guide will help you
 10. [**Best Practices**](./10-best-practices.md) - Patterns, guidelines, and recommendations
 11. [**Proxy System**](./12-proxy-system.md) - Intercepting and modifying plugin method behavior
 12. [**Store System**](./13-store-system.md) - Reactive state management with automatic change tracking
+13. [**Error Handling**](./14-error-handling.md) - Comprehensive error handling system with rich context and solutions
 
 ---
 
@@ -171,10 +172,13 @@ Follow this recommended learning path:
 9. **[Proxy System →](./12-proxy-system.md)**  
    Intercept and modify plugin method behavior
 
-10. **[Type System →](./07-type-system.md)**  
+10. **[Error Handling →](./14-error-handling.md)**  
+    Comprehensive error handling with rich context and solutions
+
+11. **[Type System →](./07-type-system.md)**  
     Advanced type-level programming techniques
 
-11. **[Best Practices →](./10-best-practices.md)**  
+12. **[Best Practices →](./10-best-practices.md)**  
     Apply recommended patterns and guidelines
 
 ---

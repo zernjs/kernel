@@ -95,12 +95,12 @@ use<P extends BuiltPlugin<string, unknown, unknown>>(
 ): KernelBuilder<U | P>;
 ```
 
-#### `.withConfig(config)`
+#### `.config(config)`
 
 Configures the kernel.
 
 ```typescript
-withConfig(config: Partial<KernelConfig>): KernelBuilder<U>;
+config(config: Partial<KernelConfig>): KernelBuilder<U>;
 ```
 
 #### `.proxy(target, config)` / `.proxy('**', config)`
@@ -276,6 +276,39 @@ proxy(target: '**', config: ProxyConfig<any>): PluginBuilder<TName, TApi, TDeps,
 ```
 
 See [Proxy System](./12-proxy-system.md) for complete documentation.
+
+#### `.config(options)`
+
+Configures plugin-specific settings including error handling.
+
+```typescript
+config(
+  config: { errors?: ErrorConfig } & Record<string, unknown>
+): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
+```
+
+**Parameters:**
+
+- `config` - Configuration object with `errors` and custom properties
+
+**Returns:** PluginBuilder with same types
+
+**Example:**
+
+```typescript
+const mathPlugin = plugin('math', '1.0.0')
+  .config({
+    errors: {
+      showSolutions: true,
+      severity: ErrorSeverity.WARN,
+    },
+    precision: 2,
+    enableLogging: true,
+  })
+  .setup(() => ({ add: (a, b) => a + b }));
+```
+
+See [Error Handling](./14-error-handling.md) for complete error configuration options.
 
 #### `.metadata(data)`
 
@@ -734,8 +767,19 @@ interface KernelConfig {
   readonly initializationTimeout?: number;
   readonly extensionsEnabled?: boolean;
   readonly logLevel?: 'debug' | 'info' | 'warn' | 'error';
+  readonly errors?: ErrorConfig;
 }
 ```
+
+**Properties:**
+
+- `autoGlobal` - Automatically register kernel globally (default: `true`)
+- `strictVersioning` - Enforce strict version matching (default: `true`)
+- `circularDependencies` - Allow circular dependencies (default: `false`)
+- `initializationTimeout` - Max initialization time in milliseconds (default: `30000`)
+- `extensionsEnabled` - Enable plugin extensions (default: `true`)
+- `logLevel` - Logging verbosity level (default: `'info'`)
+- `errors` - Error handling configuration (see [Error Handling](./14-error-handling.md))
 
 #### `PluginState`
 
@@ -792,16 +836,104 @@ interface PluginExtension {
 
 ---
 
-## ⚠️ Error Classes
+## ⚠️ Error Handling
 
 ### `ZernError`
 
-Base error class.
+Base error class with rich context and solutions.
 
 ```typescript
 abstract class ZernError extends Error {
   abstract readonly code: string;
-  readonly cause?: Error;
+
+  severity: ErrorSeverity;
+  context: ErrorContext;
+  solutions: ErrorSolution[];
+  timestamp: Date;
+  cause?: Error;
+
+  constructor(message: string, options?: ZernErrorOptions);
+  toJSON(): Record<string, unknown>;
+}
+```
+
+**Properties:**
+
+- `code` - Unique error code (e.g., `'PLUGIN_NOT_FOUND'`)
+- `severity` - Error severity (`INFO`, `WARN`, `ERROR`, `FATAL`)
+- `context` - Additional error context (file, line, plugin, method, etc.)
+- `solutions` - Array of actionable solutions
+- `timestamp` - When the error occurred
+- `cause` - Original error if wrapped
+
+### `ErrorSeverity`
+
+Error severity levels.
+
+```typescript
+enum ErrorSeverity {
+  INFO = 'info',
+  WARN = 'warn',
+  ERROR = 'error',
+  FATAL = 'fatal',
+}
+```
+
+### `ErrorContext`
+
+Additional error context.
+
+```typescript
+interface ErrorContext {
+  plugin?: string;
+  method?: string;
+  file?: string;
+  line?: number;
+  column?: number;
+  timestamp?: Date;
+  [key: string]: unknown; // Custom context
+}
+```
+
+### `ErrorSolution`
+
+Actionable solution for fixing an error.
+
+```typescript
+interface ErrorSolution {
+  title: string;
+  description: string;
+  code?: string;
+}
+```
+
+### `ErrorConfig`
+
+Error handling configuration.
+
+```typescript
+interface ErrorConfig {
+  captureStackTrace?: boolean;
+  stackTraceLimit?: number;
+  filterInternalFrames?: boolean;
+  enableColors?: boolean;
+  showContext?: boolean;
+  showSolutions?: boolean;
+  showTimestamp?: boolean;
+  severity?: ErrorSeverity;
+}
+```
+
+### `ErrorHandler`
+
+Processes and displays errors.
+
+```typescript
+class ErrorHandler {
+  constructor(config?: Partial<ErrorConfig>);
+
+  handle(error: Error | ZernError): void;
+  configure(config: Partial<ErrorConfig>): void;
 }
 ```
 
@@ -813,7 +945,8 @@ Base plugin error.
 
 ```typescript
 class PluginError extends ZernError {
-  readonly code: string = 'PLUGIN_ERROR';
+  readonly code = 'PLUGIN_ERROR';
+  constructor(context?: ErrorContext, options?: ZernErrorOptions);
 }
 ```
 
@@ -824,7 +957,7 @@ Plugin not found in registry.
 ```typescript
 class PluginNotFoundError extends PluginError {
   readonly code = 'PLUGIN_NOT_FOUND';
-  constructor(pluginId: string);
+  constructor(context?: ErrorContext, options?: ZernErrorOptions);
 }
 ```
 
@@ -835,7 +968,7 @@ Plugin failed to load.
 ```typescript
 class PluginLoadError extends PluginError {
   readonly code = 'PLUGIN_LOAD_ERROR';
-  constructor(pluginId: string, cause?: Error);
+  constructor(context?: ErrorContext, options?: ZernErrorOptions);
 }
 ```
 
@@ -846,7 +979,7 @@ Plugin dependency error.
 ```typescript
 class PluginDependencyError extends PluginError {
   readonly code = 'PLUGIN_DEPENDENCY_ERROR';
-  constructor(pluginId: string, dependencyId: string);
+  constructor(context?: ErrorContext, options?: ZernErrorOptions);
 }
 ```
 
@@ -858,7 +991,8 @@ Base kernel error.
 
 ```typescript
 class KernelError extends ZernError {
-  readonly code: string = 'KERNEL_ERROR';
+  readonly code = 'KERNEL_ERROR';
+  constructor(context?: ErrorContext, options?: ZernErrorOptions);
 }
 ```
 
@@ -869,7 +1003,7 @@ Kernel initialization failed.
 ```typescript
 class KernelInitializationError extends KernelError {
   readonly code = 'KERNEL_INITIALIZATION_ERROR';
-  constructor(cause?: Error);
+  constructor(context?: ErrorContext, options?: ZernErrorOptions);
 }
 ```
 
@@ -880,7 +1014,7 @@ Circular dependency detected.
 ```typescript
 class CircularDependencyError extends KernelError {
   readonly code = 'CIRCULAR_DEPENDENCY_ERROR';
-  constructor(cycle: readonly string[]);
+  constructor(context?: ErrorContext & { cycle?: string[] }, options?: ZernErrorOptions);
 }
 ```
 
@@ -892,7 +1026,8 @@ Base version error.
 
 ```typescript
 class VersionError extends ZernError {
-  readonly code: string = 'VERSION_ERROR';
+  readonly code = 'VERSION_ERROR';
+  constructor(context?: ErrorContext, options?: ZernErrorOptions);
 }
 ```
 
@@ -903,9 +1038,125 @@ Version mismatch error.
 ```typescript
 class VersionMismatchError extends VersionError {
   readonly code = 'VERSION_MISMATCH_ERROR';
-  constructor(pluginId: string, required: string, actual: string);
+  constructor(context?: ErrorContext, options?: ZernErrorOptions);
 }
 ```
+
+### Generic Errors
+
+#### `ValidationError`
+
+Validation failures.
+
+```typescript
+class ValidationError extends ZernError {
+  readonly code = 'VALIDATION_ERROR';
+  constructor(context?: ErrorContext, options?: ZernErrorOptions);
+}
+```
+
+#### `ConfigurationError`
+
+Configuration problems.
+
+```typescript
+class ConfigurationError extends ZernError {
+  readonly code = 'CONFIGURATION_ERROR';
+  constructor(context?: ErrorContext, options?: ZernErrorOptions);
+}
+```
+
+#### `GenericError`
+
+Generic catch-all error.
+
+```typescript
+class GenericError extends ZernError {
+  readonly code = 'GENERIC_ERROR';
+  constructor(message: string, options?: ZernErrorOptions);
+}
+```
+
+### Helper Functions
+
+#### `solution(title, description, code?)`
+
+Create an error solution.
+
+```typescript
+function solution(title: string, description: string, code?: string): ErrorSolution;
+```
+
+#### `createError(ErrorClass, context?, overrides?)`
+
+Create an error instance.
+
+```typescript
+function createError<T extends ZernError>(
+  ErrorClass: new (context?: ErrorContext) => T,
+  context?: ErrorContext,
+  overrides?: {
+    message?: string;
+    severity?: ErrorSeverity;
+    solutions?: ErrorSolution[];
+    cause?: Error;
+  }
+): T;
+```
+
+#### `throwError(ErrorClass, context?, overrides?)`
+
+Create and throw an error.
+
+```typescript
+function throwError<T extends ZernError>(
+  ErrorClass: new (context?: ErrorContext) => T,
+  context?: ErrorContext,
+  overrides?: {
+    message?: string;
+    severity?: ErrorSeverity;
+    solutions?: ErrorSolution[];
+    cause?: Error;
+  }
+): never;
+```
+
+#### `matchError(error)`
+
+Pattern match on errors.
+
+```typescript
+function matchError(error: Error | ZernError): ErrorMatcher;
+
+class ErrorMatcher<T = unknown> {
+  on<E extends ZernError>(
+    ErrorClass: new (...args: unknown[]) => E,
+    callback: (error: E) => T
+  ): ErrorMatcher<T>;
+
+  whenSeverity(severity: ErrorSeverity, callback: (error: ZernError) => T): ErrorMatcher<T>;
+
+  otherwise(callback: (error: Error | ZernError) => T): void;
+}
+```
+
+#### `developmentConfig()`
+
+Get development error configuration.
+
+```typescript
+function developmentConfig(): ErrorConfig;
+```
+
+#### `productionConfig()`
+
+Get production error configuration.
+
+```typescript
+function productionConfig(): ErrorConfig;
+```
+
+**For complete error handling documentation, see [Error Handling](./14-error-handling.md).**
 
 ---
 
@@ -916,11 +1167,19 @@ class VersionMismatchError extends VersionError {
 Context provided to lifecycle hooks.
 
 ```typescript
-interface LifecycleHookContext<TDeps = Record<string, unknown>> {
+interface LifecycleHookContext<
+  TDepsWithMeta = Record<string, unknown>,
+  TStore extends Record<string, any> = Record<string, never>,
+  TApi = unknown,
+> {
   readonly pluginName: string;
   readonly pluginId: PluginId;
   readonly kernel: KernelContext;
-  readonly plugins: TDeps;
+  readonly plugins: TDepsWithMeta;
+  readonly store: Store<TStore>;
+  readonly api?: TApi;
+  readonly phase: 'init' | 'setup' | 'ready' | 'shutdown' | 'runtime';
+  readonly method?: string;
 }
 ```
 
@@ -930,6 +1189,10 @@ interface LifecycleHookContext<TDeps = Record<string, unknown>> {
 - `pluginId` - The plugin's unique ID
 - `kernel` - Kernel context for accessing other plugins
 - `plugins` - Type-safe dependencies with API and metadata access
+- `store` - Reactive store for shared state
+- `api` - Plugin's own API (available in `onReady` and `onShutdown`)
+- `phase` - Current execution phase (`init`, `setup`, `ready`, `shutdown`, `runtime`)
+- `method` - Method name (present when `phase === 'runtime'`)
 
 **Accessing Dependencies:**
 
