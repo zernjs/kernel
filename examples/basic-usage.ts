@@ -45,7 +45,7 @@ const kernel = await createKernel()
   .use(loggerPlugin)
   .use(mathPlugin)
   .use(advancedMathPlugin)
-  .withConfig({ logLevel: 'debug' })
+  .config({ logLevel: 'debug' })
   .start();
 
 // Use plugins with type safety
