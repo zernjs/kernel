@@ -59,14 +59,12 @@ describe('parseVersion', () => {
   });
 
   it('should throw error for invalid version format', () => {
-    expect(() => parseVersion('1.2' as Version)).toThrow('Invalid version format: 1.2');
-    expect(() => parseVersion('1.2.3.4' as Version)).toThrow('Invalid version format: 1.2.3.4');
-    expect(() => parseVersion('v1.2.3' as Version)).toThrow('Invalid version format: v1.2.3');
-    expect(() => parseVersion('1.2.3-' as Version)).toThrow('Invalid version format: 1.2.3-');
-    expect(() => parseVersion('1.2.3+' as Version)).toThrow('Invalid version format: 1.2.3+');
-    expect(() => parseVersion('abc.def.ghi' as Version)).toThrow(
-      'Invalid version format: abc.def.ghi'
-    );
+    expect(() => parseVersion('1.2' as Version)).toThrow('Invalid version: 1.2');
+    expect(() => parseVersion('1.2.3.4' as Version)).toThrow('Invalid version: 1.2.3.4');
+    expect(() => parseVersion('v1.2.3' as Version)).toThrow('Invalid version: v1.2.3');
+    expect(() => parseVersion('1.2.3-' as Version)).toThrow('Invalid version: 1.2.3-');
+    expect(() => parseVersion('1.2.3+' as Version)).toThrow('Invalid version: 1.2.3+');
+    expect(() => parseVersion('abc.def.ghi' as Version)).toThrow('Invalid version: abc.def.ghi');
   });
 });
 
