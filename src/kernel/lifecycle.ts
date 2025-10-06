@@ -80,21 +80,6 @@ class LifecycleManagerImpl implements LifecycleManager {
       const registry = container.getRegistry();
       const plugins = registry.getAll();
 
-      if (kernelProxies.length > 0) {
-        for (const proxy of kernelProxies) {
-          if (proxy.targetPluginId === '**') {
-            for (const targetPlugin of plugins) {
-              extensions.registerProxy({
-                targetPluginId: targetPlugin.id,
-                config: proxy.config,
-              });
-            }
-          } else {
-            extensions.registerProxy(proxy);
-          }
-        }
-      }
-
       for (const pluginMeta of plugins) {
         for (const ext of pluginMeta.extensions) {
           extensions.registerExtension(ext);
@@ -105,12 +90,14 @@ class LifecycleManagerImpl implements LifecycleManager {
             if (proxy.targetPluginId === 'self') {
               extensions.registerProxy({
                 targetPluginId: pluginMeta.id,
+                sourcePluginId: pluginMeta.id,
                 config: proxy.config,
               });
             } else if (proxy.targetPluginId === '*') {
               for (const dep of pluginMeta.dependencies) {
                 extensions.registerProxy({
                   targetPluginId: dep.pluginId,
+                  sourcePluginId: pluginMeta.id,
                   config: proxy.config,
                 });
               }
@@ -118,11 +105,15 @@ class LifecycleManagerImpl implements LifecycleManager {
               for (const targetPlugin of plugins) {
                 extensions.registerProxy({
                   targetPluginId: targetPlugin.id,
+                  sourcePluginId: pluginMeta.id,
                   config: proxy.config,
                 });
               }
             } else {
-              extensions.registerProxy(proxy);
+              extensions.registerProxy({
+                ...proxy,
+                sourcePluginId: pluginMeta.id,
+              });
             }
           }
         }
@@ -144,9 +135,98 @@ class LifecycleManagerImpl implements LifecycleManager {
         await this.initializePlugin(pluginName, container, extensions, config);
       }
 
+      if (kernelProxies.length > 0) {
+        await this.applyKernelProxies(kernelProxies, container, extensions, config);
+      }
+
       return success(undefined);
     } catch (error) {
       return failure(new KernelInitializationError({ cause: error as Error }));
+    }
+  }
+
+  private async applyKernelProxies(
+    kernelProxies: readonly ProxyMetadata[],
+    container: PluginContainer,
+    extensions: ExtensionManager,
+    config: KernelConfig
+  ): Promise<void> {
+    const registry = container.getRegistry();
+    const allPlugins = registry.getAll();
+
+    const allPluginInfos: Record<string, import('@/extension').PluginInfo> = {};
+    for (const p of allPlugins) {
+      const pResult = registry.get(p.id);
+      if (pResult.success) {
+        const pInstance = container.getInstance(p.id);
+        if (pInstance.success) {
+          const pPlugin = pResult.data;
+          allPluginInfos[pPlugin.name] = {
+            api: pInstance.data,
+            store: pPlugin.store,
+            metadata: {
+              name: pPlugin.name,
+              version: pPlugin.version,
+              ...(typeof pPlugin.metadata === 'object' && pPlugin.metadata !== null
+                ? pPlugin.metadata
+                : {}),
+            },
+          };
+        }
+      }
+    }
+
+    for (const proxy of kernelProxies) {
+      const targetsToProxy =
+        proxy.targetPluginId === '**'
+          ? allPlugins
+          : allPlugins.filter(p => p.id === proxy.targetPluginId);
+
+      for (const targetPlugin of targetsToProxy) {
+        const pluginResult = registry.get(targetPlugin.id);
+        if (!pluginResult.success) continue;
+
+        const plugin = pluginResult.data;
+        const instanceResult = container.getInstance(targetPlugin.id);
+        if (!instanceResult.success) continue;
+
+        const instance = instanceResult.data;
+
+        if (typeof instance === 'object' && instance !== null && config.extensionsEnabled) {
+          extensions.registerProxy({
+            targetPluginId: targetPlugin.id,
+            config: proxy.config,
+          });
+
+          const proxySourceInfos: Record<string, import('@/extension').ProxySourceInfo> = {};
+          for (const p of allPlugins) {
+            const pResult = registry.get(p.id);
+            if (pResult.success) {
+              proxySourceInfos[p.id] = {
+                store: pResult.data.store,
+              };
+            }
+          }
+
+          const newInstance = extensions.applyExtensions(
+            plugin.name,
+            instance as object,
+            plugin.store,
+            {
+              name: plugin.name,
+              version: plugin.version,
+              ...(typeof plugin.metadata === 'object' && plugin.metadata !== null
+                ? plugin.metadata
+                : {}),
+            },
+            allPluginInfos,
+            proxySourceInfos,
+            undefined
+          );
+
+          container.setInstance(plugin.name, newInstance);
+        }
+      }
     }
   }
 
@@ -232,10 +312,53 @@ class LifecycleManagerImpl implements LifecycleManager {
               }
             : undefined;
 
+          const allPlugins = registry.getAll();
+          const pluginInfos: Record<string, import('@/extension').PluginInfo> = {};
+
+          for (const p of allPlugins) {
+            const pResult = registry.get(p.id);
+            if (pResult.success) {
+              const pInstance = container.getInstance(p.id);
+              if (pInstance.success) {
+                const pPlugin = pResult.data;
+                pluginInfos[pPlugin.name] = {
+                  api: pInstance.data,
+                  store: pPlugin.store,
+                  metadata: {
+                    name: pPlugin.name,
+                    version: pPlugin.version,
+                    ...(typeof pPlugin.metadata === 'object' && pPlugin.metadata !== null
+                      ? pPlugin.metadata
+                      : {}),
+                  },
+                };
+              }
+            }
+          }
+
+          const proxySourceInfos: Record<string, import('@/extension').ProxySourceInfo> = {};
+          for (const p of allPlugins) {
+            const pResult = registry.get(p.id);
+            if (pResult.success) {
+              proxySourceInfos[p.id] = {
+                store: pResult.data.store,
+              };
+            }
+          }
+
           finalInstance = extensions.applyExtensions(
             pluginName,
             instance as object,
             plugin.store,
+            {
+              name: plugin.name,
+              version: plugin.version,
+              ...(typeof plugin.metadata === 'object' && plugin.metadata !== null
+                ? plugin.metadata
+                : {}),
+            },
+            pluginInfos,
+            proxySourceInfos,
             onRuntimeError
           ) as unknown;
         }

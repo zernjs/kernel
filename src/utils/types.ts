@@ -63,6 +63,16 @@ export type MetadataForName<U, Name extends string> =
     : never;
 
 /**
+ * Extracts the store type for a plugin with a specific name
+ */
+export type StoreForName<U, Name extends string> =
+  Extract<U, BuiltPlugin<Name, any, any, any, any>> extends infer Match
+    ? Match extends BuiltPlugin<Name, any, any, any, infer S>
+      ? S
+      : Record<string, any>
+    : Record<string, any>;
+
+/**
  * Computes all extensions that apply to a plugin with a specific name
  */
 export type ExtensionsForName<U, Name extends string> = UnionToIntersection<ExtFor<U, Name>>;
@@ -116,6 +126,28 @@ export type PluginsMapWithMetadata<U> = {
     K,
     Extract<U, BuiltPlugin<K, any, any, any, any>>['version'],
     Extract<U, BuiltPlugin<K, any, any, any, any>>['id'],
+    MetadataForName<U, K>
+  >;
+};
+
+/**
+ * Plugin access for proxy context - combines API with $store and $meta
+ */
+export type ProxyPluginAccess<TApi, TStore extends Record<string, any>, TMetadata> = TApi & {
+  readonly $store: import('@/store').Store<TStore>;
+  readonly $meta: TMetadata & {
+    readonly name: string;
+    readonly version: string;
+  };
+};
+
+/**
+ * Computes the plugins map for kernel proxy context with $store and $meta access
+ */
+export type ProxyPluginsMapForKernel<U> = {
+  [K in PluginNameOf<U>]: ProxyPluginAccess<
+    ApiForName<U, K> & ExtensionsForName<U, K>,
+    StoreForName<U, K>,
     MetadataForName<U, K>
   >;
 };

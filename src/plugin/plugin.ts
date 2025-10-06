@@ -16,6 +16,8 @@ import type {
   ProxyTarget,
   ProxyDependenciesWildcard,
   ProxyGlobalWildcard,
+  ProxyPluginAccess,
+  ProxyPluginsMap,
 } from '@/extension/proxy-types';
 import { validateProxyConfig } from '@/extension/proxy-types';
 import { createStore, isStore } from '@/store';
@@ -232,7 +234,7 @@ export interface PluginBuilder<
   ): PluginBuilder<TName, TApi, TDeps, TExtMap & Record<TTargetName, TExt>, TMetadata, TStore>;
 
   /**
-   * Intercepts calls to the plugin's own methods.
+   * Intercepts calls to the plugin's own methods (self-proxy).
    *
    * @param config - Proxy configuration with before/after/around/onError hooks
    * @returns Plugin builder
@@ -240,16 +242,27 @@ export interface PluginBuilder<
    * @example
    * ```typescript
    * const mathPlugin = plugin('math', '1.0.0')
+   *   .store(() => ({ count: 0 }))
+   *   .metadata({ version: '1.0.0' })
    *   .proxy({
    *     include: ['add'],
-   *     before: ctx => console.log('Calling add:', ctx.args)
+   *     before: ctx => {
+   *       // ✅ ctx.store is YOUR store (typed)
+   *       ctx.store.count++;
+   *
+   *       // ✅ ctx.plugins.math has your API + $store + $meta
+   *       console.log(ctx.plugins.math.$store.count);
+   *       console.log(ctx.plugins.math.$meta.version);
+   *     }
    *   })
    *   .setup(() => ({
    *     add: (a: number, b: number) => a + b
    *   }));
    * ```
    */
-  proxy(config: ProxyConfig<TStore>): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
+  proxy(
+    config: ProxyConfig<TStore, Record<TName, ProxyPluginAccess<TApi, TStore, TMetadata>>>
+  ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
   /**
    * Intercepts calls to a specific dependency plugin's methods.
@@ -261,9 +274,20 @@ export interface PluginBuilder<
    * @example
    * ```typescript
    * const loggingPlugin = plugin('logging', '1.0.0')
+   *   .store(() => ({ logCount: 0 }))
    *   .depends(mathPlugin, '^1.0.0')
    *   .proxy(mathPlugin, {
-   *     before: ctx => console.log(`[LOG] ${ctx.method}(${ctx.args})`)
+   *     before: ctx => {
+   *       // ✅ ctx.store is YOUR store (loggingPlugin)
+   *       ctx.store.logCount++;
+   *
+   *       // ✅ ctx.plugins.math has target plugin with $store and $meta
+   *       ctx.plugins.math.$store.callCount++;
+   *       console.log(ctx.plugins.math.$meta.version);
+   *
+   *       // ✅ Call target plugin methods
+   *       const result = ctx.plugins.math.add(1, 2);
+   *     }
    *   })
    *   .setup(() => ({}));
    * ```
@@ -276,7 +300,10 @@ export interface PluginBuilder<
     TTargetStore extends Record<string, any> = any,
   >(
     target: BuiltPlugin<TTargetName, TTargetApi, TTargetExtMap, TTargetMetadata, TTargetStore>,
-    config: ProxyConfig<TStore>
+    config: ProxyConfig<
+      TStore,
+      Record<TTargetName, ProxyPluginAccess<TTargetApi, TTargetStore, TTargetMetadata>>
+    >
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
   /**
@@ -295,24 +322,29 @@ export interface PluginBuilder<
    * @example
    * ```typescript
    * const timingPlugin = plugin('timing', '1.0.0')
+   *   .store(() => ({ timings: new Map() }))
    *   .depends(mathPlugin, '^1.0.0')    // Will be proxied
    *   .depends(apiPlugin, '^1.0.0')     // Will be proxied
    *   .proxy('*', {                     // '*' = all dependencies
    *     before: ctx => {
-   *       console.log(`[${ctx.plugin}] Calling ${ctx.method}`);
-   *       console.time(`${ctx.plugin}.${ctx.method}`);
-   *     },
-   *     after: (result, ctx) => {
-   *       console.timeEnd(`${ctx.plugin}.${ctx.method}`);
-   *       return result;
+   *       // ✅ ctx.store is YOUR store (timingPlugin)
+   *       ctx.store.timings.set(ctx.method, Date.now());
+   *
+   *       // ✅ ctx.plugins has ALL dependencies typed with $store and $meta
+   *       ctx.plugins.math.$store.callCount++;
+   *       ctx.plugins.api.$store.requestCount++;
+   *
+   *       // ✅ Call methods on any dependency
+   *       ctx.plugins.math.add(1, 2);
+   *       ctx.plugins.api.getUser(123);
    *     }
    *   })
    *   .setup(() => ({}));
    * ```
    */
-  proxy(
+  proxy<TDepsRecord extends Record<string, any> = TDeps & Record<string, any>>(
     target: ProxyDependenciesWildcard,
-    config: ProxyConfig<TStore>
+    config: ProxyConfig<TStore, ProxyPluginsMap<TDepsRecord>>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
   /**
@@ -340,10 +372,13 @@ export interface PluginBuilder<
    *   .store(() => ({ calls: new Map<string, number>() }))
    *   .proxy('**', {                    // '**' = ALL kernel plugins
    *     before: ctx => {
-   *       const key = `${ctx.plugin}.${ctx.method}`;
+   *       // ✅ ctx.store is YOUR store (monitorPlugin)
+   *       const key = `${ctx.pluginName}.${ctx.method}`;
    *       const count = (ctx.store.calls.get(key) || 0) + 1;
    *       ctx.store.calls.set(key, count);
-   *       console.log(`[GLOBAL] ${key} (#${count})`);
+   *
+   *       // ⚠️ ctx.plugins is 'any' - you don't know which plugins exist
+   *       // Use ctx.pluginName to check dynamically
    *     }
    *   })
    *   .setup(({ store }) => ({
@@ -353,7 +388,7 @@ export interface PluginBuilder<
    */
   proxy(
     target: ProxyGlobalWildcard,
-    config: ProxyConfig<TStore>
+    config: ProxyConfig<TStore, any>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
   /**

@@ -1,5 +1,81 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { PluginId } from '@/core';
+import type { Store } from '@/store';
+
+/**
+ * Plugin access object exposed via ctx.plugins.<name>
+ * Combines plugin API with $store and $meta access.
+ */
+export type ProxyPluginAccess<
+  TApi = any,
+  TStore extends Record<string, any> = any,
+  TMetadata = any,
+> = TApi & {
+  /**
+   * The plugin's reactive store (full Store object with ALL methods).
+   * Includes ALL Store methods: watch(), watchAll(), watchBatch(), unwatch(),
+   * batch(), transaction(), computed(), select(), getHistory(), clearHistory(),
+   * undo(), redo(), reset(), getMetrics(), clearWatchers()
+   *
+   * @example
+   * ```typescript
+   * // Access reactive properties
+   * ctx.plugins.math.$store.callCount++
+   *
+   * // Watch changes
+   * ctx.plugins.math.$store.watch('callCount', (change) => {
+   *   console.log(`Count: ${change.oldValue} → ${change.newValue}`);
+   * });
+   *
+   * // Watch all changes
+   * ctx.plugins.math.$store.watchAll((change) => {
+   *   console.log(`${change.key} changed`);
+   * });
+   *
+   * // Batch operations
+   * ctx.plugins.math.$store.batch(() => {
+   *   ctx.plugins.math.$store.x = 1;
+   *   ctx.plugins.math.$store.y = 2;
+   * });
+   *
+   * // Transactions with rollback
+   * await ctx.plugins.math.$store.transaction(async () => {
+   *   ctx.plugins.math.$store.value = 100;
+   *   // If error, automatically rolls back
+   * });
+   *
+   * // Computed values
+   * const doubled = ctx.plugins.math.$store.computed(s => s.count * 2);
+   * console.log(doubled.value);
+   *
+   * // Get metrics
+   * const metrics = ctx.plugins.math.$store.getMetrics?.();
+   * ```
+   */
+  readonly $store: Store<TStore>;
+
+  /**
+   * The plugin's metadata including name, version, and custom metadata.
+   *
+   * @example
+   * ```typescript
+   * console.log(ctx.plugins.math.$meta.name);     // "math"
+   * console.log(ctx.plugins.math.$meta.version);  // "1.0.0"
+   * console.log(ctx.plugins.math.$meta.author);   // Custom metadata
+   * ```
+   */
+  readonly $meta: TMetadata & {
+    readonly name: string;
+    readonly version: string;
+  };
+};
+
+/**
+ * Helper type to wrap all plugins in a dependencies object with $store and $meta
+ */
+export type ProxyPluginsMap<TDeps extends Record<string, any>> = {
+  [K in keyof TDeps]: TDeps[K] extends any ? ProxyPluginAccess<TDeps[K], any, any> : never;
+};
 
 /**
  * Context object provided to proxy interceptors.
@@ -9,19 +85,72 @@ import type { PluginId } from '@/core';
  * ```typescript
  * .proxy({
  *   before: ctx => {
- *     console.log(ctx.plugin);  // Plugin name
- *     console.log(ctx.method);  // Method name
- *     console.log(ctx.args);    // Method arguments
- *     console.log(ctx.store);   // Reactive store
+ *     console.log(ctx.pluginName);           // Plugin being proxied
+ *     console.log(ctx.method);               // Method being called
+ *     console.log(ctx.store);                // YOUR plugin's store (full Store object)
+ *     console.log(ctx.plugins.math.$store);  // Target plugin's store (full Store object)
+ *     ctx.plugins.math.add(1, 2);            // Call target plugin methods
  *   }
  * })
  * ```
  */
-export interface ProxyContext<TMethod extends (...args: any[]) => any, TStore = any> {
+export interface ProxyContext<
+  TMethod extends (...args: any[]) => any,
+  TStore extends Record<string, any> = any,
+  TPlugins = Record<string, any>,
+> {
   /**
-   * Name of the plugin being proxied.
+   * Name of the plugin being proxied (string).
+   *
+   * @example
+   * ```typescript
+   * before: ctx => {
+   *   console.log(ctx.pluginName); // "math"
+   * }
+   * ```
    */
-  readonly plugin: string;
+  readonly pluginName: string;
+
+  /**
+   * Typed access to available plugin instances with their stores and metadata.
+   * Each plugin object contains:
+   * - `$store` - The plugin's reactive store
+   * - `$meta` - The plugin's metadata
+   * - Plugin API methods (add, multiply, etc.)
+   *
+   * Available plugins depend on proxy type:
+   * - Single plugin proxy: Only the target plugin
+   * - Wildcard '*': All dependency plugins
+   * - Global '**': Record<string, any> (no typing)
+   *
+   * @example
+   * ```typescript
+   * // Single plugin proxy
+   * .proxy(mathPlugin, {
+   *   before: ctx => {
+   *     // Access target plugin's store
+   *     ctx.plugins.math.$store.callCount++;
+   *
+   *     // Access target plugin's metadata
+   *     console.log(ctx.plugins.math.$meta.version);
+   *
+   *     // Call target plugin methods
+   *     const result = ctx.plugins.math.add(1, 2);
+   *   }
+   * })
+   *
+   * // Wildcard '*' proxy
+   * .depends(mathPlugin, '^1.0.0')
+   * .depends(apiPlugin, '^1.0.0')
+   * .proxy('*', {
+   *   before: ctx => {
+   *     ctx.plugins.math.$store.lastResult = 0;
+   *     ctx.plugins.api.$store.requestCount++;
+   *   }
+   * })
+   * ```
+   */
+  readonly plugins: TPlugins;
 
   /**
    * Name of the method being called.
@@ -39,17 +168,49 @@ export interface ProxyContext<TMethod extends (...args: any[]) => any, TStore = 
   _modifiedArgs?: Parameters<TMethod>;
 
   /**
-   * Reactive store shared across lifecycle, setup, and proxy interceptors.
-   * Read and write properties to share state.
+   * Reactive store of YOUR plugin (the one doing the proxy).
+   * Full Store object with ALL methods: watch(), watchAll(), watchBatch(), unwatch(),
+   * batch(), transaction(), computed(), select(), getHistory(), clearHistory(),
+   * undo(), redo(), reset(), getMetrics(), clearWatchers()
+   * This is NOT the target plugin's store - access target stores via ctx.plugins.<name>.$store
    *
    * @example
    * ```typescript
-   * before: ctx => {
-   *   ctx.store.callCount = (ctx.store.callCount || 0) + 1;
-   * }
+   * const loggingPlugin = plugin('logging', '1.0.0')
+   *   .store(() => ({ logCount: 0, logs: [] }))
+   *   .depends(mathPlugin, '^1.0.0')
+   *   .proxy(mathPlugin, {
+   *     before: ctx => {
+   *       // YOUR store (loggingPlugin's store) - full Store object with ALL methods
+   *       ctx.store.logCount++;
+   *
+   *       // Watch your own store changes
+   *       ctx.store.watch('logCount', (change) => {
+   *         console.log(`Log count: ${change.oldValue} → ${change.newValue}`);
+   *       });
+   *
+   *       // Batch operations on your store
+   *       ctx.store.batch(() => {
+   *         ctx.store.logCount++;
+   *         ctx.store.logs.push('New log');
+   *       });
+   *
+   *       // Target plugin's store (mathPlugin's store) - also full Store object
+   *       ctx.plugins.math.$store.callCount++;
+   *
+   *       // Watch target plugin's store
+   *       ctx.plugins.math.$store.watch('callCount', (change) => {
+   *         console.log(`Math called ${change.newValue} times`);
+   *       });
+   *
+   *       // Use computed values from target plugin
+   *       const doubled = ctx.plugins.math.$store.computed(s => s.callCount * 2);
+   *       console.log(doubled.value);
+   *     }
+   *   })
    * ```
    */
-  readonly store: TStore;
+  readonly store: Store<TStore>;
 
   /**
    * Skips execution of the original method.
@@ -95,22 +256,36 @@ export interface ProxyContext<TMethod extends (...args: any[]) => any, TStore = 
   modifyArgs: (...args: Parameters<TMethod>) => void;
 }
 
-export type ProxyBefore<TMethod extends (...args: any[]) => any, TStore = any> = (
-  ctx: ProxyContext<TMethod, TStore>
-) => void | Promise<void>;
+export type ProxyBefore<
+  TMethod extends (...args: any[]) => any,
+  TStore extends Record<string, any> = any,
+  TPlugins = Record<string, any>,
+> = (ctx: ProxyContext<TMethod, TStore, TPlugins>) => void | Promise<void>;
 
-export type ProxyAfter<TMethod extends (...args: any[]) => any, TStore = any> = (
+export type ProxyAfter<
+  TMethod extends (...args: any[]) => any,
+  TStore extends Record<string, any> = any,
+  TPlugins = Record<string, any>,
+> = (
   result: Awaited<ReturnType<TMethod>>,
-  ctx: ProxyContext<TMethod, TStore>
+  ctx: ProxyContext<TMethod, TStore, TPlugins>
 ) => Awaited<ReturnType<TMethod>> | Promise<Awaited<ReturnType<TMethod>>>;
 
-export type ProxyError<TMethod extends (...args: any[]) => any, TStore = any> = (
+export type ProxyError<
+  TMethod extends (...args: any[]) => any,
+  TStore extends Record<string, any> = any,
+  TPlugins = Record<string, any>,
+> = (
   error: Error,
-  ctx: ProxyContext<TMethod, TStore>
+  ctx: ProxyContext<TMethod, TStore, TPlugins>
 ) => Awaited<ReturnType<TMethod>> | Promise<Awaited<ReturnType<TMethod>>> | never;
 
-export type ProxyAround<TMethod extends (...args: any[]) => any, TStore = any> = (
-  ctx: ProxyContext<TMethod, TStore>,
+export type ProxyAround<
+  TMethod extends (...args: any[]) => any,
+  TStore extends Record<string, any> = any,
+  TPlugins = Record<string, any>,
+> = (
+  ctx: ProxyContext<TMethod, TStore, TPlugins>,
   next: () => Promise<Awaited<ReturnType<TMethod>>>
 ) => Promise<Awaited<ReturnType<TMethod>>>;
 
@@ -155,7 +330,10 @@ export type ProxyGlobalWildcard = '**';
  *   .setup(() => ({ ... }));
  * ```
  */
-export interface ProxyConfig<TStore = any> {
+export interface ProxyConfig<
+  TStore extends Record<string, any> = any,
+  TPlugins = Record<string, any>,
+> {
   /**
    * Glob patterns or regex to include specific methods.
    * If not specified, all methods are included.
@@ -196,7 +374,7 @@ export interface ProxyConfig<TStore = any> {
    * }
    * ```
    */
-  before?: ProxyBefore<any, TStore>;
+  before?: ProxyBefore<any, TStore, TPlugins>;
 
   /**
    * Runs after successful method execution.
@@ -211,7 +389,7 @@ export interface ProxyConfig<TStore = any> {
    * }
    * ```
    */
-  after?: ProxyAfter<any, TStore>;
+  after?: ProxyAfter<any, TStore, TPlugins>;
 
   /**
    * Handles errors thrown during method execution.
@@ -228,7 +406,7 @@ export interface ProxyConfig<TStore = any> {
    * }
    * ```
    */
-  onError?: ProxyError<any, TStore>;
+  onError?: ProxyError<any, TStore, TPlugins>;
 
   /**
    * Complete control over method execution.
@@ -249,7 +427,7 @@ export interface ProxyConfig<TStore = any> {
    * }
    * ```
    */
-  around?: ProxyAround<any, TStore>;
+  around?: ProxyAround<any, TStore, TPlugins>;
 
   /**
    * Execution priority when multiple proxies target the same method.
@@ -270,7 +448,9 @@ export interface ProxyConfig<TStore = any> {
    * condition: ctx => ctx.args[0] > 100  // Only proxy if first arg > 100
    * ```
    */
-  condition?: (ctx: ProxyContext<any, TStore>) => boolean;
+  condition?: (
+    ctx: ProxyContext<any, TStore extends Record<string, any> ? TStore : any, TPlugins>
+  ) => boolean;
 
   /**
    * Optional group name for organizing related proxies.
@@ -287,18 +467,20 @@ export type ProxyTarget = PluginId | 'self' | '*' | '**';
 
 export interface ProxyMetadata {
   readonly targetPluginId: ProxyTarget;
+  readonly sourcePluginId?: PluginId; // Who registered this proxy
   readonly config: ProxyConfig<any>;
 }
 
 export interface CompiledMethodProxy {
   readonly targetPluginId: PluginId;
+  readonly sourcePluginId?: PluginId;
   readonly methodName: string;
-  readonly before?: ProxyBefore<any>;
-  readonly after?: ProxyAfter<any>;
-  readonly onError?: ProxyError<any>;
-  readonly around?: ProxyAround<any>;
+  readonly before?: ProxyBefore<any, any, any>;
+  readonly after?: ProxyAfter<any, any, any>;
+  readonly onError?: ProxyError<any, any, any>;
+  readonly around?: ProxyAround<any, any, any>;
   readonly priority: number;
-  readonly condition?: (ctx: ProxyContext<any>) => boolean;
+  readonly condition?: (ctx: ProxyContext<any, any, any>) => boolean;
   readonly group?: string;
 }
 
@@ -360,29 +542,39 @@ export function shouldProxyMethod(methodName: string, config: ProxyConfig): bool
   return true;
 }
 
-export function skipExecution<TStore = any>(ctx: ProxyContext<any, TStore>): void {
+export function skipExecution<
+  TStore extends Record<string, any> = any,
+  TPlugins = Record<string, any>,
+>(ctx: ProxyContext<any, TStore, TPlugins>): void {
   ctx._skipExecution = true;
 }
 
-export function replaceResult<T, TStore = any>(ctx: ProxyContext<any, TStore>, result: T): void {
+export function replaceResult<
+  T,
+  TStore extends Record<string, any> = any,
+  TPlugins = Record<string, any>,
+>(ctx: ProxyContext<any, TStore, TPlugins>, result: T): void {
   ctx._skipExecution = true;
   ctx._overrideResult = result;
 }
 
-export function modifyArgs<TMethod extends (...args: any[]) => any, TStore = any>(
-  ctx: ProxyContext<TMethod, TStore>,
-  ...newArgs: Parameters<TMethod>
-): void {
+export function modifyArgs<
+  TMethod extends (...args: any[]) => any,
+  TStore extends Record<string, any> = any,
+  TPlugins = Record<string, any>,
+>(ctx: ProxyContext<TMethod, TStore, TPlugins>, ...newArgs: Parameters<TMethod>): void {
   ctx._modifiedArgs = newArgs;
 }
 
 export function enhanceContext<
   TMethod extends (...args: any[]) => any,
-  TStore = Record<string, never>,
->(ctx: ProxyContext<TMethod, TStore>): ProxyContext<TMethod, TStore> {
-  (ctx as any).skip = (): void => skipExecution(ctx);
-  (ctx as any).replace = (result: Awaited<ReturnType<TMethod>>): void => replaceResult(ctx, result);
-  (ctx as any).modifyArgs = (...args: Parameters<TMethod>): void => modifyArgs(ctx, ...args);
+  TStore extends Record<string, any> = Record<string, never>,
+  TPlugins = Record<string, any>,
+>(ctx: ProxyContext<TMethod, TStore, TPlugins>): ProxyContext<TMethod, TStore, TPlugins> {
+  (ctx as any).skip = (): void => skipExecution(ctx as any);
+  (ctx as any).replace = (result: Awaited<ReturnType<TMethod>>): void =>
+    replaceResult(ctx as any, result);
+  (ctx as any).modifyArgs = (...args: Parameters<TMethod>): void => modifyArgs(ctx as any, ...args);
 
   return ctx;
 }

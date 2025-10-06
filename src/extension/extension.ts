@@ -13,6 +13,20 @@ export interface RuntimeErrorHandler {
   (error: Error, context: { pluginName: string; method: string }): Promise<void> | void;
 }
 
+export interface PluginInfo {
+  api: unknown;
+  store: unknown;
+  metadata: {
+    name: string;
+    version: string;
+    [key: string]: unknown;
+  };
+}
+
+export interface ProxySourceInfo {
+  store: unknown;
+}
+
 export interface ExtensionManager {
   registerExtension(extension: PluginExtension): void;
   registerProxy(proxy: ProxyMetadata): void;
@@ -20,6 +34,9 @@ export interface ExtensionManager {
     pluginName: string,
     baseApi: TApi,
     store?: unknown,
+    metadata?: unknown,
+    pluginInfos?: Record<string, PluginInfo>,
+    proxySourceInfos?: Record<string, ProxySourceInfo>,
     onRuntimeError?: RuntimeErrorHandler
   ): TApi;
   getExtensions(pluginName: string): readonly PluginExtension[];
@@ -47,6 +64,9 @@ class ExtensionManagerImpl implements ExtensionManager {
     pluginName: string,
     baseApi: TApi,
     store: unknown = {},
+    metadata: unknown = {},
+    pluginInfos: Record<string, PluginInfo> = {},
+    proxySourceInfos: Record<string, ProxySourceInfo> = {},
     onRuntimeError?: RuntimeErrorHandler
   ): TApi {
     const extensions = this.extensions.get(createPluginId(pluginName)) ?? [];
@@ -75,7 +95,31 @@ class ExtensionManagerImpl implements ExtensionManager {
     }
 
     if (proxies.length > 0) {
-      extendedApi = this.applyProxies(pluginName, extendedApi, proxies, store, onRuntimeError);
+      const pluginsWithAccessors: Record<string, unknown> = {};
+
+      for (const [name, info] of Object.entries(pluginInfos)) {
+        pluginsWithAccessors[name] = {
+          ...(typeof info.api === 'object' && info.api !== null ? info.api : {}),
+          $store: info.store,
+          $meta: info.metadata,
+        };
+      }
+
+      pluginsWithAccessors[pluginName] = {
+        ...(typeof extendedApi === 'object' && extendedApi !== null ? extendedApi : {}),
+        $store: store,
+        $meta: metadata,
+      };
+
+      extendedApi = this.applyProxies(
+        pluginName,
+        extendedApi,
+        proxies,
+        store,
+        pluginsWithAccessors,
+        proxySourceInfos,
+        onRuntimeError
+      );
     }
 
     return extendedApi;
@@ -86,6 +130,8 @@ class ExtensionManagerImpl implements ExtensionManager {
     api: TApi,
     proxies: readonly ProxyMetadata[],
     store: unknown,
+    plugins: Record<string, unknown>,
+    proxySourceInfos: Record<string, ProxySourceInfo>,
     onRuntimeError?: RuntimeErrorHandler
   ): TApi {
     const proxiedApi = { ...api } as Record<string, unknown>;
@@ -111,6 +157,8 @@ class ExtensionManagerImpl implements ExtensionManager {
           originalMethod as (...args: unknown[]) => unknown,
           methodProxies,
           store,
+          plugins,
+          proxySourceInfos,
           onRuntimeError
         );
       }
@@ -142,6 +190,7 @@ class ExtensionManagerImpl implements ExtensionManager {
       for (const methodName of targetMethods) {
         compiled.push({
           targetPluginId: proxyMeta.targetPluginId as PluginId,
+          sourcePluginId: proxyMeta.sourcePluginId,
           methodName,
           before: config.before,
           after: config.after,
@@ -163,67 +212,119 @@ class ExtensionManagerImpl implements ExtensionManager {
     originalMethod: (...args: unknown[]) => unknown,
     proxies: readonly CompiledMethodProxy[],
     store: unknown,
+    plugins: Record<string, unknown>,
+    proxySourceInfos: Record<string, ProxySourceInfo>,
     onRuntimeError?: RuntimeErrorHandler
   ): (...args: unknown[]) => unknown {
     return async (...args: unknown[]) => {
-      const baseContext = {
-        plugin: pluginName,
-        method: methodName,
-        args,
-        store,
-      };
-
-      const enhancedContext = enhanceContext(baseContext as any);
+      let currentArgs = args;
+      let skipExecution = false;
+      let overrideResult: unknown;
 
       try {
         for (const proxy of proxies) {
-          if (proxy.condition && !proxy.condition(enhancedContext)) {
+          const proxyStore = proxy.sourcePluginId
+            ? (proxySourceInfos[proxy.sourcePluginId]?.store ?? {})
+            : store;
+
+          const ctx = enhanceContext({
+            pluginName,
+            plugins,
+            method: methodName,
+            args: currentArgs,
+            store: proxyStore,
+          } as any);
+
+          if (proxy.condition && !proxy.condition(ctx)) {
             continue;
           }
 
           if (proxy.before) {
-            await proxy.before(enhancedContext);
+            await proxy.before(ctx);
 
-            if (enhancedContext._skipExecution) {
-              return enhancedContext._overrideResult;
+            if (ctx._skipExecution) {
+              skipExecution = true;
+              overrideResult = ctx._overrideResult;
+              break;
+            }
+
+            if (ctx._modifiedArgs) {
+              currentArgs = ctx._modifiedArgs;
             }
           }
         }
 
-        const finalArgs = enhancedContext._modifiedArgs ?? enhancedContext.args;
-        const aroundProxy = proxies.find(
-          p => p.around && (!p.condition || p.condition(enhancedContext))
-        );
-
         let result: unknown;
 
-        if (aroundProxy) {
-          result = await aroundProxy.around!(enhancedContext, async () => {
-            return await originalMethod(...finalArgs);
-          });
+        if (skipExecution) {
+          result = overrideResult;
         } else {
-          result = await originalMethod(...finalArgs);
+          const aroundProxy = proxies.find(p => p.around);
+
+          if (aroundProxy) {
+            const proxyStore = aroundProxy.sourcePluginId
+              ? (proxySourceInfos[aroundProxy.sourcePluginId]?.store ?? {})
+              : store;
+
+            const ctx = enhanceContext({
+              pluginName,
+              plugins,
+              method: methodName,
+              args: currentArgs,
+              store: proxyStore,
+            } as any);
+
+            result = await aroundProxy.around!(ctx, async () => {
+              return await originalMethod(...currentArgs);
+            });
+          } else {
+            result = await originalMethod(...currentArgs);
+          }
         }
 
         for (const proxy of proxies) {
-          if (proxy.condition && !proxy.condition(enhancedContext)) {
+          const proxyStore = proxy.sourcePluginId
+            ? (proxySourceInfos[proxy.sourcePluginId]?.store ?? {})
+            : store;
+
+          const ctx = enhanceContext({
+            pluginName,
+            plugins,
+            method: methodName,
+            args: currentArgs,
+            store: proxyStore,
+          } as any);
+
+          if (proxy.condition && !proxy.condition(ctx)) {
             continue;
           }
 
           if (proxy.after) {
-            result = await proxy.after(result, enhancedContext);
+            result = await proxy.after(result, ctx);
           }
         }
 
         return result;
       } catch (error) {
         for (const proxy of proxies) {
-          if (proxy.condition && !proxy.condition(enhancedContext)) {
+          const proxyStore = proxy.sourcePluginId
+            ? (proxySourceInfos[proxy.sourcePluginId]?.store ?? {})
+            : store;
+
+          const ctx = enhanceContext({
+            pluginName,
+            plugins,
+            method: methodName,
+            args: currentArgs,
+            store: proxyStore,
+          } as any);
+
+          if (proxy.condition && !proxy.condition(ctx)) {
             continue;
           }
 
           if (proxy.onError) {
-            return await proxy.onError(error as Error, enhancedContext);
+            return await proxy.onError(error as Error, ctx);
           }
         }
 

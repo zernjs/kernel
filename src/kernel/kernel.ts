@@ -122,6 +122,12 @@ export interface KernelBuilder<
    * ALL plugin methods. This is applied OUTSIDE the plugins themselves, making it
    * perfect for cross-cutting concerns at the application layer.
    *
+   * **Full Type Safety:**
+   * - `ctx.pluginName` - Name of the plugin being intercepted (string)
+   * - `ctx.plugins.<pluginName>` - Access plugin API with autocomplete
+   * - `ctx.plugins.<pluginName>.$store` - Access plugin's reactive store
+   * - `ctx.plugins.<pluginName>.$meta` - Access plugin's metadata
+   *
    * **Difference from plugin-level `'**'`:**
    * - **Kernel proxy**: Applied at application level, after all plugins are initialized
    * - **Plugin proxy**: Applied at plugin level, can be distributed with the plugin
@@ -140,22 +146,28 @@ export interface KernelBuilder<
    *   .use(databasePlugin)
    *   .proxy('**', {                    // '**' = ALL plugins in this kernel
    *     before: ctx => {
-   *       console.log(`[APP] ${ctx.plugin}.${ctx.method}(`, ...ctx.args, ')')
+   *       // ✅ Full autocomplete for all registered plugins!
+   *       ctx.plugins.auth.checkPermission();
+   *       ctx.plugins.api.$store.requestCount++;
+   *       console.log(`[APP] ${ctx.pluginName}.${ctx.method}(`, ...ctx.args, ')')
    *     },
    *     after: (result, ctx) => {
-   *       console.log(`[APP] ${ctx.plugin}.${ctx.method} =>`, result);
+   *       console.log(`[APP] ${ctx.pluginName}.${ctx.method} =>`, result);
    *       return result;
    *     },
    *     onError: (error, ctx) => {
-   *       console.error(`[APP ERROR] ${ctx.plugin}.${ctx.method}:`, error);
+   *       console.error(`[APP ERROR] ${ctx.pluginName}.${ctx.method}:`, error);
    *       // Send to error tracking service
-   *       trackError({ plugin: ctx.plugin, method: ctx.method, error });
+   *       trackError({ plugin: ctx.pluginName, method: ctx.method, error });
    *       throw error;
    *     }
    *   });
    * ```
    */
-  proxy(target: ProxyGlobalWildcard, config: ProxyConfig<any>): KernelBuilder<U>;
+  proxy(
+    target: ProxyGlobalWildcard,
+    config: ProxyConfig<Record<string, any>, import('@/utils/types').ProxyPluginsMapForKernel<U>>
+  ): KernelBuilder<U>;
 
   /**
    * Builds the kernel without initializing plugins.
