@@ -57,7 +57,7 @@
 | 🗄️ **Reactive Store**             | Automatic reactive state with watchers, computed values, and transactions |
 | 🏷️ **Custom Metadata**            | Attach and access metadata with full type safety via `$meta`              |
 | 📦 **Direct Exports**             | Import plugin methods directly like a normal library                      |
-| 🛡️ **Result Pattern**             | Functional error handling without exceptions                              |
+| 🛡️ **Error Handling**             | Hierarchical typed errors with stack traces, solutions, and severities    |
 | 🔍 **Version Control**            | Semantic versioning with flexible constraint matching                     |
 
 ### Advanced Features
@@ -352,6 +352,65 @@ console.log(add(2, 3)); // ✅ Full type safety!
 console.log(multiply(4, 5)); // ✅ Autocomplete works!
 ```
 
+### 9. Error Handling
+
+Professional error handling with typed errors, stack traces, and actionable solutions:
+
+```typescript
+import { ValidationError, ErrorSeverity, solution } from '@zern/kernel';
+
+const apiPlugin = plugin('api', '1.0.0')
+  .config({
+    errors: {
+      showStackTrace: true,
+      stackTraceLimit: 10,
+      formatErrors: true,
+      severity: ErrorSeverity.ERROR,
+    },
+  })
+  .onError(async ({ error, phase, method }) => {
+    // Global error handler for all plugin phases
+    console.error(`[${phase}] Error in ${method}:`, error);
+
+    // Send to monitoring service
+    if (error.severity === ErrorSeverity.FATAL) {
+      await alertTeam(error);
+    }
+  })
+  .setup(() => ({
+    async fetchUser(userId: string) {
+      if (!userId) {
+        throw new ValidationError(
+          { userId },
+          {
+            severity: ErrorSeverity.ERROR,
+            solutions: [
+              solution(
+                'Provide a valid user ID',
+                'The userId parameter cannot be empty',
+                'api.fetchUser("user-123")'
+              ),
+            ],
+          }
+        );
+      }
+      return { id: userId, name: 'John' };
+    },
+  }));
+```
+
+**Error Features:**
+
+- ✅ **Typed Errors** - Hierarchical error classes with full type safety
+- ✅ **Stack Traces** - Automatic parsing with file, line, and column
+- ✅ **Solutions** - Actionable suggestions for resolving errors
+- ✅ **Severities** - `INFO`, `WARN`, `ERROR`, `FATAL` levels
+- ✅ **Context** - Rich metadata about where and why errors occurred
+- ✅ **Global Hooks** - Capture errors from any phase (`init`, `setup`, `runtime`, `shutdown`)
+- ✅ **Formatting** - Beautiful console output with colors and structure
+
+> 📚 See [Error Handling](./docs/14-error-handling.md) for complete documentation
+
 ---
 
 ## 📚 Documentation
@@ -372,6 +431,7 @@ Comprehensive documentation is available in the [`docs/`](./docs/) directory:
 | [**Best Practices**](./docs/10-best-practices.md)               | Patterns and guidelines                                         |
 | [**Proxy System**](./docs/12-proxy-system.md)                   | Method interception and proxying                                |
 | [**Store System**](./docs/13-store-system.md)                   | Reactive state with watchers, computed values, and transactions |
+| [**Error Handling**](./docs/14-error-handling.md)               | Typed errors with stack traces, solutions, and severities       |
 
 ---
 
@@ -387,6 +447,7 @@ Explore complete examples in the [`examples/`](./examples/) directory:
 - [**Proxy Demo**](./examples/proxy-demo.ts) - Method interception with multiple proxies
 - [**Proxy Complete Demo**](./examples/proxy-complete-demo.ts) - All 4 proxy modes in action
 - [**Kernel Proxy Demo**](./examples/kernel-proxy-demo.ts) - Kernel-level proxy examples
+- [**Error Handling Demo**](./examples/error-handling-demo.ts) - Comprehensive error handling with telemetry, retry, and error boundaries
 - [**Simple Plugin**](./examples/simple-plugin/) - Minimalist plugin boilerplate
 - [**Math Plugin**](./examples/math-plugin/) - Opinionated, scalable plugin architecture
 
@@ -466,6 +527,59 @@ const cachePlugin = plugin('cache', '1.0.0')
   .setup(() => ({}));
 ```
 
+### Error Monitoring & Resilience
+
+See [`examples/plugins/`](./examples/plugins/) for complete implementations:
+
+```typescript
+// Telemetry: Track all errors across plugins
+const telemetryPlugin = plugin('telemetry', '1.0.0')
+  .proxy('**', {
+    onError: async (error, ctx) => {
+      // Capture and send to monitoring service
+      console.log(`[TELEMETRY] Error in ${ctx.plugin}.${ctx.method}:`, error);
+      await sendToDatadog({ error, context: ctx });
+      throw error; // Re-throw to allow other handlers
+    },
+  })
+  .setup(() => ({
+    /* ... */
+  }));
+
+// Retry: Automatic retry with exponential backoff
+const retryPlugin = plugin('retry', '1.0.0')
+  .proxy('**', {
+    around: async (ctx, next) => {
+      const maxRetries = 3;
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          return await next();
+        } catch (error) {
+          if (i === maxRetries - 1) throw error;
+          await sleep(Math.pow(2, i) * 1000);
+        }
+      }
+    },
+  })
+  .setup(() => ({
+    /* ... */
+  }));
+
+// Error Boundary: Graceful fallbacks
+const errorBoundaryPlugin = plugin('errorBoundary', '1.0.0')
+  .proxy('**', {
+    onError: async (error, ctx) => {
+      console.error(`[BOUNDARY] Caught error in ${ctx.plugin}.${ctx.method}`);
+      return getFallbackValue(ctx.method); // Return fallback instead of throwing
+    },
+  })
+  .setup(() => ({
+    /* ... */
+  }));
+```
+
+> 💡 **Pro Tip**: These patterns demonstrate how Zern's proxy system enables powerful cross-cutting concerns without modifying plugin code!
+
 ---
 
 ## 🔍 Advanced Configuration
@@ -475,13 +589,18 @@ const cachePlugin = plugin('cache', '1.0.0')
 ```typescript
 const kernel = await createKernel()
   .use(myPlugin)
-  .withConfig({
+  .config({
     autoGlobal: true, // Auto-register as global kernel
     strictVersioning: true, // Enforce strict version matching
     circularDependencies: false, // Disallow circular dependencies
     initializationTimeout: 30000, // Timeout in milliseconds
     extensionsEnabled: true, // Enable plugin extensions
     logLevel: 'info', // Log level: debug | info | warn | error
+    errors: {
+      showStackTrace: true, // Show stack traces in errors
+      stackTraceLimit: 10, // Limit stack trace depth
+      formatErrors: true, // Format errors for console output
+    },
   })
   .start();
 ```
@@ -508,6 +627,7 @@ const authPlugin = plugin('auth', '1.0.0')
 plugin(name: string, version: string)
   .metadata(data: Record<string, unknown>)
   .store(factory: () => state)                 // Reactive store (watch, computed, batch, transaction)
+  .config(options: Partial<PluginConfig>)      // Plugin-level configuration (errors, etc)
   .depends(plugin: BuiltPlugin, versionRange?: string)
   .extend(target: BuiltPlugin, fn: (api) => extensions)
   .proxy(config: ProxyConfig)                  // Self-proxy
@@ -517,7 +637,7 @@ plugin(name: string, version: string)
   .onInit(hook: (ctx) => void)
   .onReady(hook: (ctx) => void)
   .onShutdown(hook: (ctx) => void)
-  .onError(hook: (ctx) => void)
+  .onError(hook: (ctx) => void)                // Captures errors from all phases
   .setup(fn: (ctx) => api)
 ```
 
@@ -526,7 +646,7 @@ plugin(name: string, version: string)
 ```typescript
 createKernel()
   .use(plugin: BuiltPlugin)
-  .withConfig(config: Partial<KernelConfig>)
+  .config(config: Partial<KernelConfig>)       // Kernel-level configuration
   .proxy(target: BuiltPlugin, config: ProxyConfig)
   .proxy('**', config: ProxyConfig)
   .build()
