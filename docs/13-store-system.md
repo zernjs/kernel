@@ -620,12 +620,27 @@ const analyticsPlugin = plugin('analytics', '1.0.0')
   .store(() => ({
     events: [] as Array<{ type: string; data: any }>,
   }))
-  .onInit(({ plugins, store }) => {
-    // ❌ NOTE: plugins don't expose $store directly yet
-    // This is a future enhancement with the event system
-    // For now, store access is internal to each plugin
-  });
+  .proxy(cachePlugin, {
+    before: ctx => {
+      // ✅ Access other plugin's store via proxy!
+      ctx.plugins.cache.$store.watch('hits', change => {
+        ctx.store.events.push({
+          type: 'cache_hit',
+          data: { hits: change.newValue },
+        });
+      });
+
+      // ✅ Also access YOUR store
+      ctx.store.events.push({
+        type: 'cache_access',
+        data: { method: ctx.method },
+      });
+    },
+  })
+  .setup(() => ({}));
 ```
+
+> **💡 Note:** Cross-plugin store access is now available via the Proxy System! Use `ctx.plugins.<name>.$store` to access other plugin stores.
 
 ### Store with Validation
 

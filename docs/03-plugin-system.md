@@ -307,7 +307,7 @@ const monitorPlugin = plugin('monitor', '1.0.0')
   .proxy('**', {
     // ✅ Proxies ALL plugins in kernel
     before: ctx => {
-      console.log(`[MONITOR] ${ctx.plugin}.${ctx.method}() called`);
+      console.log(`[MONITOR] ${ctx.pluginName}.${ctx.method}() called`);
     },
   })
   .setup(() => ({}));

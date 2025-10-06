@@ -529,7 +529,7 @@ const errorBoundaryPlugin = plugin('error-boundary', '1.0.0')
       try {
         return await next();
       } catch (error) {
-        console.error(`Caught error in ${ctx.plugin}.${ctx.method}`);
+        console.error(`Caught error in ${ctx.pluginName}.${ctx.method}`);
 
         // Return fallback values
         if (ctx.method.startsWith('get')) return null;
@@ -559,7 +559,7 @@ const telemetryPlugin = plugin('telemetry', '1.0.0')
 
       if (zernError) {
         // Add runtime context
-        zernError.context.plugin = ctx.plugin;
+        zernError.context.plugin = ctx.pluginName;
         zernError.context.method = ctx.method;
 
         // Send to monitoring service

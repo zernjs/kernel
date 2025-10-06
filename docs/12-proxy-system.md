@@ -123,7 +123,7 @@ const loggingPlugin = plugin('logging', '1.0.0')
     // ✅ Target specific plugin
     methods: 'add',
     before: ctx => {
-      console.log(`[LOG] Proxying ${ctx.plugin}.${ctx.method}`);
+      console.log(`[LOG] Proxying ${ctx.pluginName}.${ctx.method}`);
     },
   })
   .setup(() => ({}));
@@ -144,7 +144,7 @@ const timingPlugin = plugin('timing', '1.0.0')
   .proxy('*', {
     // ✅ '*' = all dependencies
     before: ctx => {
-      console.log(`[TIMING] ${ctx.plugin}.${ctx.method} started`);
+      console.log(`[TIMING] ${ctx.pluginName}.${ctx.method} started`);
     },
   })
   .setup(() => ({}));
@@ -164,7 +164,7 @@ const globalMonitorPlugin = plugin('global-monitor', '1.0.0')
     // ✅ '**' = ALL plugins in kernel
     priority: 100,
     before: ctx => {
-      console.log(`[GLOBAL] ${ctx.plugin}.${ctx.method}()`);
+      console.log(`[GLOBAL] ${ctx.pluginName}.${ctx.method}()`);
     },
   })
   .setup(() => ({}));
@@ -189,7 +189,7 @@ const kernel = await createKernel()
   // ✅ Kernel proxies a specific plugin
   .proxy(mathPlugin, {
     before: ctx => {
-      console.log(`[KERNEL] Intercepting ${ctx.plugin}.${ctx.method}`);
+      console.log(`[KERNEL] Intercepting ${ctx.pluginName}.${ctx.method}`);
     },
   })
   .start();
@@ -206,7 +206,7 @@ const kernel = await createKernel()
   .proxy('**', {
     priority: 100,
     before: ctx => {
-      console.log(`[KERNEL-GLOBAL] ${ctx.plugin}.${ctx.method}() called`);
+      console.log(`[KERNEL-GLOBAL] ${ctx.pluginName}.${ctx.method}() called`);
     },
   })
   .start();
@@ -413,21 +413,95 @@ Handles errors from the original method.
 
 ## 🎭 Proxy Context
 
-The `ProxyContext` provides information about the method call and helper methods:
+The `ProxyContext` provides comprehensive information about the method call, access to stores, and helper methods:
 
 ```typescript
-interface ProxyContext<TMethod> {
-  readonly plugin: string; // Plugin name
-  readonly method: string; // Method name
-  readonly args: Parameters<TMethod>; // Method arguments
+interface ProxyContext<TMethod, TStore, TPlugins> {
+  // Basic information
+  readonly pluginName: string; // Plugin name being proxied
+  readonly method: string; // Method name being called
+  readonly args: Parameters<TMethod>; // Method arguments (typed!)
 
-  data: Record<string, any>; // Shared data between interceptors
+  // Store access
+  readonly store: Store<TStore>; // YOUR plugin's store (who is doing the proxy)
+  readonly plugins: TPlugins; // Access to target plugin(s) with $store and $meta
 
+  // Helper methods
   skip: () => void; // Skip method execution
   replace: (result) => void; // Replace result
   modifyArgs: (...args) => void; // Modify arguments
 }
 ```
+
+### Store Access
+
+#### Your Plugin's Store (`ctx.store`)
+
+Access YOUR plugin's store (the one registering the proxy):
+
+```typescript
+const loggingPlugin = plugin('logging', '1.0.0')
+  .store(() => ({ logCount: 0, logs: [] }))
+  .depends(mathPlugin, '^1.0.0')
+  .proxy(mathPlugin, {
+    before: ctx => {
+      // ✅ Access YOUR store (loggingPlugin's store)
+      ctx.store.logCount++;
+      ctx.store.logs.push(`Calling ${ctx.method}`);
+
+      // ✅ Use ALL Store methods
+      ctx.store.watch('logCount', change => {
+        console.log(`Log count: ${change.newValue}`);
+      });
+
+      ctx.store.batch(() => {
+        ctx.store.logCount++;
+        ctx.store.logs.push('Batch operation');
+      });
+    },
+  })
+  .setup(() => ({}));
+```
+
+#### Target Plugin's Store (`ctx.plugins.<name>.$store`)
+
+Access the target plugin's store and metadata:
+
+```typescript
+const loggerPlugin = plugin('logger', '1.0.0')
+  .store(() => ({ logs: [] }))
+  .depends(mathPlugin, '^1.0.0')
+  .proxy(mathPlugin, {
+    before: ctx => {
+      // ✅ Access target plugin's API
+      const result = ctx.plugins.math.add(1, 2);
+
+      // ✅ Access target plugin's store (full Store object!)
+      ctx.plugins.math.$store.callCount++;
+
+      // ✅ Use ALL Store methods on target store
+      ctx.plugins.math.$store.watch('callCount', change => {
+        console.log(`Math called ${change.newValue} times`);
+      });
+
+      // ✅ Access target plugin's metadata
+      console.log(`Plugin: ${ctx.plugins.math.$meta.name}`);
+      console.log(`Version: ${ctx.plugins.math.$meta.version}`);
+      console.log(`Author: ${ctx.plugins.math.$meta.author}`);
+    },
+  })
+  .setup(() => ({}));
+```
+
+### Complete Store Methods Available
+
+Both `ctx.store` and `ctx.plugins.<name>.$store` expose the **full Store API**:
+
+- **Watchers:** `watch()`, `watchAll()`, `watchBatch()`, `unwatch()`
+- **Batch Operations:** `batch()`, `transaction()`
+- **Computed Values:** `computed()`, `select()`
+- **History:** `getHistory()`, `clearHistory()`, `undo()`, `redo()`, `reset()`
+- **Utilities:** `getMetrics()`, `clearWatchers()`
 
 ### Helper Methods
 
@@ -475,25 +549,31 @@ Modify the arguments before calling the original method:
 })
 ```
 
-### Shared Data (`ctx.data`)
+### Shared Data Between Interceptors
 
-Share data between interceptors using `ctx.data`:
+Use **factory function pattern** with closures for type-safe data sharing:
 
 ```typescript
-.proxy(apiPlugin, ctx => ({
-  before: () => {
-    ctx.data.startTime = Date.now();
-    ctx.data.userId = getCurrentUser();
-  },
-  after: (result) => {
-    const duration = Date.now() - (ctx.data.startTime as number);
-    log(`User ${ctx.data.userId} - Duration: ${duration}ms`);
-    return result;
-  },
-}))
+.proxy(apiPlugin, ctx => {
+  // ✅ Use closure for type-safe sharing
+  let startTime: number;
+  let userId: string;
+
+  return {
+    before: () => {
+      startTime = Date.now();
+      userId = getCurrentUser();
+    },
+    after: (result) => {
+      const duration = Date.now() - startTime; // ✅ Type-safe!
+      log(`User ${userId} - Duration: ${duration}ms`);
+      return result;
+    },
+  };
+})
 ```
 
-> **💡 Tip:** Use factory function `ctx => ({ ... })` for type-safe sharing via closures!
+> **💡 Tip:** Factory function pattern provides better type safety than using `ctx.data`!
 
 ---
 

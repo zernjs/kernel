@@ -135,7 +135,7 @@ const kernel = await createKernel()
   // Global proxy for all plugins
   .proxy('**', {
     priority: 100,
-    before: ctx => console.log(`Global: ${ctx.plugin}.${ctx.method}`),
+    before: ctx => console.log(`Global: ${ctx.pluginName}.${ctx.method}`),
   })
   .start();
 ```
@@ -497,22 +497,51 @@ interface ProxyConfig<TStore = any> {
 }
 ```
 
-#### `ProxyContext<TMethod>`
+#### `ProxyContext<TMethod, TStore, TPlugins>`
 
-Context provided to proxy interceptors.
+Context provided to proxy interceptors with complete type safety.
 
 ```typescript
-interface ProxyContext<TMethod extends (...args: any[]) => any> {
-  readonly plugin: string;
-  readonly method: string;
-  readonly args: Parameters<TMethod>;
+interface ProxyContext<TMethod, TStore, TPlugins> {
+  // Basic information
+  readonly pluginName: string; // Plugin name being proxied
+  readonly method: string; // Method name being called
+  readonly args: Parameters<TMethod>; // Method arguments (fully typed)
 
-  data: Record<string, any>;
+  // Store access
+  readonly store: Store<TStore>; // YOUR plugin's store (full Store object)
+  readonly plugins: TPlugins; // Target plugin(s) with $store and $meta
 
-  skip: () => void;
-  replace: (result: Awaited<ReturnType<TMethod>>) => void;
-  modifyArgs: (...args: Parameters<TMethod>) => void;
+  // Helper methods
+  skip: () => void; // Skip method execution
+  replace: (result: Awaited<ReturnType<TMethod>>) => void; // Replace result
+  modifyArgs: (...args: Parameters<TMethod>) => void; // Modify arguments
 }
+```
+
+**Store Access:**
+
+- `ctx.store` - Your plugin's reactive store with all Store methods
+- `ctx.plugins.<name>` - Target plugin's API
+- `ctx.plugins.<name>.$store` - Target plugin's reactive store
+- `ctx.plugins.<name>.$meta` - Target plugin's metadata (name, version, custom)
+
+**Example:**
+
+```typescript
+.proxy(mathPlugin, {
+  before: ctx => {
+    // Your store
+    ctx.store.logCount++;
+    ctx.store.watch('logCount', change => { ... });
+
+    // Target plugin
+    ctx.plugins.math.$store.callCount++;
+    ctx.plugins.math.$store.watch('callCount', change => { ... });
+    console.log(ctx.plugins.math.$meta.name); // "math"
+    console.log(ctx.plugins.math.$meta.version); // "1.0.0"
+  },
+})
 ```
 
 #### Interceptor Types
