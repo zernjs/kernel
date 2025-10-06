@@ -21,7 +21,10 @@ export {
   collectResults,
 } from '@/core';
 
+export type { ErrorContext, ErrorSolution, ErrorConfig, StackFrame } from '@/errors';
+
 export {
+  ErrorSeverity,
   ZernError,
   PluginError,
   PluginNotFoundError,
@@ -32,7 +35,20 @@ export {
   CircularDependencyError,
   VersionError,
   VersionMismatchError,
-} from '@/core';
+  ValidationError,
+  ConfigurationError,
+  GenericError,
+} from '@/errors';
+
+export { ErrorHandler } from '@/errors';
+export {
+  solution,
+  createError,
+  throwError,
+  matchError,
+  developmentConfig,
+  productionConfig,
+} from '@/errors';
 
 export type { PluginSetupContext, BuiltPlugin, PluginBuilder } from '@/plugin';
 export { plugin } from '@/plugin';

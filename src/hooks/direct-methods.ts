@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Kernel } from '@/kernel';
-import { KernelInitializationError } from '@/core';
+import { KernelInitializationError, PluginNotFoundError, ErrorSeverity, solution } from '@/errors';
 
 let globalKernel: any = undefined;
 
@@ -25,7 +25,21 @@ export function createDirectMethod<TPluginName extends string, TMethodName exten
     const method = plugin[methodName];
 
     if (typeof method !== 'function') {
-      throw new Error(`Method ${methodName} not found in plugin ${pluginName}`);
+      const error = new PluginNotFoundError({ plugin: pluginName });
+      error.context.method = methodName;
+      error.severity = ErrorSeverity.ERROR;
+      error.solutions = [
+        solution(
+          'Check the method name',
+          `Verify that the method "${methodName}" exists in the ${pluginName} plugin`,
+          `const api = kernel.get('${pluginName}');\nconsole.log(Object.keys(api));`
+        ),
+        solution(
+          'Ensure the plugin is properly initialized',
+          'The plugin might not have exposed this method in its setup function'
+        ),
+      ];
+      throw error;
     }
 
     return method(...args);

@@ -9,10 +9,19 @@ import { createPluginId } from '@/core';
 import type { ProxyMetadata, CompiledMethodProxy } from './proxy-types';
 import { shouldProxyMethod, enhanceContext } from './proxy-types';
 
+export interface RuntimeErrorHandler {
+  (error: Error, context: { pluginName: string; method: string }): Promise<void> | void;
+}
+
 export interface ExtensionManager {
   registerExtension(extension: PluginExtension): void;
   registerProxy(proxy: ProxyMetadata): void;
-  applyExtensions<TApi extends object>(pluginName: string, baseApi: TApi, store?: unknown): TApi;
+  applyExtensions<TApi extends object>(
+    pluginName: string,
+    baseApi: TApi,
+    store?: unknown,
+    onRuntimeError?: RuntimeErrorHandler
+  ): TApi;
   getExtensions(pluginName: string): readonly PluginExtension[];
   getProxies(pluginName: string): readonly ProxyMetadata[];
   clear(): void;
@@ -37,7 +46,8 @@ class ExtensionManagerImpl implements ExtensionManager {
   applyExtensions<TApi extends object>(
     pluginName: string,
     baseApi: TApi,
-    store: unknown = {}
+    store: unknown = {},
+    onRuntimeError?: RuntimeErrorHandler
   ): TApi {
     const extensions = this.extensions.get(createPluginId(pluginName)) ?? [];
     const proxies = this.proxies.get(createPluginId(pluginName)) ?? [];
@@ -65,7 +75,7 @@ class ExtensionManagerImpl implements ExtensionManager {
     }
 
     if (proxies.length > 0) {
-      extendedApi = this.applyProxies(pluginName, extendedApi, proxies, store);
+      extendedApi = this.applyProxies(pluginName, extendedApi, proxies, store, onRuntimeError);
     }
 
     return extendedApi;
@@ -75,7 +85,8 @@ class ExtensionManagerImpl implements ExtensionManager {
     pluginName: string,
     api: TApi,
     proxies: readonly ProxyMetadata[],
-    store: unknown
+    store: unknown,
+    onRuntimeError?: RuntimeErrorHandler
   ): TApi {
     const proxiedApi = { ...api } as Record<string, unknown>;
     const compiledProxies = this.compileProxies(api, proxies);
@@ -99,7 +110,8 @@ class ExtensionManagerImpl implements ExtensionManager {
           methodName,
           originalMethod as (...args: unknown[]) => unknown,
           methodProxies,
-          store
+          store,
+          onRuntimeError
         );
       }
     }
@@ -150,7 +162,8 @@ class ExtensionManagerImpl implements ExtensionManager {
     methodName: string,
     originalMethod: (...args: unknown[]) => unknown,
     proxies: readonly CompiledMethodProxy[],
-    store: unknown
+    store: unknown,
+    onRuntimeError?: RuntimeErrorHandler
   ): (...args: unknown[]) => unknown {
     return async (...args: unknown[]) => {
       const baseContext = {
@@ -212,6 +225,13 @@ class ExtensionManagerImpl implements ExtensionManager {
           if (proxy.onError) {
             return await proxy.onError(error as Error, enhancedContext);
           }
+        }
+
+        if (onRuntimeError) {
+          await onRuntimeError(error as Error, {
+            pluginName,
+            method: methodName,
+          });
         }
 
         throw error;

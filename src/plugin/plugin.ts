@@ -20,6 +20,7 @@ import type {
 import { validateProxyConfig } from '@/extension/proxy-types';
 import { createStore, isStore } from '@/store';
 import type { Store } from '@/store';
+import { PluginDependencyError, ErrorSeverity, solution } from '@/errors';
 
 export interface PluginSetupContext<
   TDeps = Record<string, never>,
@@ -46,6 +47,7 @@ export interface BuiltPlugin<
   readonly hooks: PluginLifecycleHooks;
   readonly metadata: TMetadata;
   readonly store: Store<TStore>;
+  readonly config: { errors?: import('@/errors').ErrorConfig } & Record<string, unknown>;
   readonly setupFn: (ctx: PluginSetupContext<Record<string, unknown>, TStore>) => TApi;
   readonly __extensions__?: TExtMap | undefined;
 
@@ -97,6 +99,28 @@ export interface PluginBuilder<
   store<TNewStore extends Record<string, any>>(
     factory: () => TNewStore
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TNewStore>;
+
+  /**
+   * Configures plugin-specific settings including error handling.
+   *
+   * @param config - Plugin configuration object
+   * @returns Plugin builder
+   *
+   * @example
+   * ```typescript
+   * const mathPlugin = plugin('math', '1.0.0')
+   *   .config({
+   *     errors: {
+   *       showSolutions: true,
+   *       severity: ErrorSeverity.WARN
+   *     }
+   *   })
+   *   .setup(() => ({ add: (a, b) => a + b }));
+   * ```
+   */
+  config(
+    config: { errors?: import('@/errors').ErrorConfig } & Record<string, unknown>
+  ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
 
   /**
    * Attaches custom metadata to the plugin.
@@ -425,6 +449,7 @@ class PluginBuilderImpl<
   private hooks: PluginLifecycleHooks<TDeps, TStore> = {};
   private pluginMetadata: TMetadata = {} as TMetadata;
   private pluginStore: Store<TStore> = createStore({} as TStore);
+  private pluginConfig: { errors?: import('@/errors').ErrorConfig } & Record<string, unknown> = {};
 
   constructor(
     private readonly name: TName,
@@ -441,6 +466,13 @@ class PluginBuilderImpl<
       : createStore(rawStore)) as unknown as Store<TStore>;
 
     return this as unknown as PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TNewStore>;
+  }
+
+  config(
+    config: { errors?: import('@/errors').ErrorConfig } & Record<string, unknown>
+  ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore> {
+    this.pluginConfig = { ...this.pluginConfig, ...config };
+    return this;
   }
 
   metadata<TNewMetadata extends Record<string, unknown>>(
@@ -532,10 +564,19 @@ class PluginBuilderImpl<
       const hasDependency = this.dependencies.some(dep => dep.pluginId === target.id);
 
       if (!hasDependency) {
-        throw new Error(
-          `Cannot proxy plugin '${target.name}' without declaring it as a dependency. ` +
-            `Use .depends(${target.name}Plugin, '...') before .proxy(${target.name}Plugin, ...)`
-        );
+        const error = new PluginDependencyError({
+          plugin: this.name,
+          dependency: target.name,
+        });
+        error.severity = ErrorSeverity.ERROR;
+        error.solutions = [
+          solution(
+            'Declare the plugin as a dependency',
+            `Add .depends(${target.name}Plugin, '^1.0.0') before calling .proxy()`,
+            `.depends(${target.name}Plugin, '^1.0.0')\n  .proxy(${target.name}Plugin, { ... })`
+          ),
+        ];
+        throw error;
       }
 
       targetPluginId = target.id;
@@ -596,7 +637,8 @@ class PluginBuilderImpl<
       this.proxies,
       hooks,
       this.pluginMetadata,
-      this.pluginStore
+      this.pluginStore,
+      this.pluginConfig
     );
   }
 }
@@ -620,7 +662,8 @@ class BuiltPluginImpl<
     readonly proxies: readonly ProxyMetadata[],
     readonly hooks: PluginLifecycleHooks,
     readonly metadata: TMetadata,
-    readonly store: Store<TStore>
+    readonly store: Store<TStore>,
+    readonly config: { errors?: import('@/errors').ErrorConfig } & Record<string, unknown>
   ) {
     this.id = createPluginId(name);
   }
@@ -642,7 +685,8 @@ class BuiltPluginImpl<
       [...this.proxies, proxyMetadata],
       this.hooks,
       this.metadata,
-      this.store
+      this.store,
+      this.config
     );
   }
 
@@ -658,7 +702,8 @@ class BuiltPluginImpl<
       this.proxies,
       { ...this.hooks, onInit: hook as any },
       this.metadata,
-      this.store
+      this.store,
+      this.config
     );
   }
 
@@ -674,7 +719,8 @@ class BuiltPluginImpl<
       this.proxies,
       { ...this.hooks, onReady: hook as any },
       this.metadata,
-      this.store
+      this.store,
+      this.config
     );
   }
 
@@ -690,7 +736,8 @@ class BuiltPluginImpl<
       this.proxies,
       { ...this.hooks, onShutdown: hook as any },
       this.metadata,
-      this.store
+      this.store,
+      this.config
     );
   }
 
@@ -706,7 +753,8 @@ class BuiltPluginImpl<
       this.proxies,
       { ...this.hooks, onError: hook as any },
       this.metadata,
-      this.store
+      this.store,
+      this.config
     );
   }
 }

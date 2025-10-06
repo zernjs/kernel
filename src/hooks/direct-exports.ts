@@ -5,6 +5,7 @@
  */
 
 import { getGlobalKernel } from './direct-methods';
+import { PluginNotFoundError, ErrorSeverity, solution } from '@/errors';
 
 /**
  * Creates direct method exports with automatic type inference
@@ -53,10 +54,25 @@ export function createDirectExports<
       const method = (plugin as any)[methodName];
 
       if (typeof method !== 'function') {
-        throw new Error(
-          `Method ${methodName} not found in plugin ${pluginName}. ` +
-            `Make sure the plugin is registered and the kernel is started.`
-        );
+        const error = new PluginNotFoundError({ plugin: pluginName });
+        error.context.method = methodName;
+        error.severity = ErrorSeverity.ERROR;
+        error.solutions = [
+          solution(
+            'Verify the method exists',
+            `Check that "${methodName}" is exported in the ${pluginName} plugin's setup function`
+          ),
+          solution(
+            'Ensure the kernel is started',
+            'Make sure you call await kernel.start() before using direct exports',
+            'const kernel = await createKernel().use(plugin).start();'
+          ),
+          solution(
+            'Check method signature matches',
+            'The method signature in createDirectExports must match the actual API'
+          ),
+        ];
+        throw error;
       }
 
       return method(...args);

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @file Plugin lifecycle manager
  * @description Manages ordered initialization and graceful shutdown
@@ -14,7 +15,8 @@ import {
 } from '@/core';
 import type { PluginContainer } from './container';
 import type { ExtensionManager } from '@/extension';
-import { success, failure, KernelInitializationError } from '@/core';
+import { success, failure } from '@/core';
+import { KernelInitializationError } from '@/errors';
 import { createDependencyResolver } from '@/plugin';
 import type { ProxyMetadata } from '@/extension/proxy-types';
 
@@ -130,7 +132,7 @@ class LifecycleManagerImpl implements LifecycleManager {
       const orderResult = resolver.resolve(plugins);
 
       if (!orderResult.success) {
-        return failure(new KernelInitializationError(orderResult.error));
+        return failure(new KernelInitializationError({ cause: orderResult.error }));
       }
 
       this.initializationOrder = orderResult.data.map(id => {
@@ -144,7 +146,7 @@ class LifecycleManagerImpl implements LifecycleManager {
 
       return success(undefined);
     } catch (error) {
-      return failure(new KernelInitializationError(error as Error));
+      return failure(new KernelInitializationError({ cause: error as Error }));
     }
   }
 
@@ -194,6 +196,7 @@ class LifecycleManagerImpl implements LifecycleManager {
           kernel: kernelContext,
           plugins: pluginsWithMetadata,
           store: plugin.store,
+          phase: 'init' as const,
         };
         await plugin.hooks.onInit(onInitContext as any);
       }
@@ -207,10 +210,33 @@ class LifecycleManagerImpl implements LifecycleManager {
       let finalInstance = instance;
       if (config.extensionsEnabled) {
         if (typeof instance === 'object' && instance !== null) {
+          const onRuntimeError = plugin.hooks.onError
+            ? async (
+                error: Error,
+                context: { pluginName: string; method: string }
+              ): Promise<void> => {
+                const errorContext = {
+                  pluginName,
+                  pluginId: plugin.id,
+                  kernel: kernelContext,
+                  plugins: pluginsWithMetadata,
+                  store: plugin.store,
+                  phase: 'runtime' as const,
+                  method: context.method,
+                };
+                try {
+                  await plugin.hooks.onError!(error, errorContext as any);
+                } catch (hookError) {
+                  console.error(`Error hook failed for plugin ${pluginName}:`, hookError);
+                }
+              }
+            : undefined;
+
           finalInstance = extensions.applyExtensions(
             pluginName,
             instance as object,
-            plugin.store
+            plugin.store,
+            onRuntimeError
           ) as unknown;
         }
       }
@@ -230,6 +256,7 @@ class LifecycleManagerImpl implements LifecycleManager {
           plugins: pluginsWithMetadata,
           store: plugin.store,
           api: finalInstance,
+          phase: 'ready' as const,
         };
         await plugin.hooks.onReady(onReadyContext as any);
       }
@@ -259,6 +286,7 @@ class LifecycleManagerImpl implements LifecycleManager {
           kernel: kernelContext,
           plugins: pluginsWithMetadata,
           store: pluginResult.data.store,
+          phase: 'init' as const,
         };
 
         try {
@@ -307,6 +335,7 @@ class LifecycleManagerImpl implements LifecycleManager {
               plugins: pluginsWithMetadata,
               store: pluginResult.data.store,
               api,
+              phase: 'shutdown' as const,
             };
 
             await pluginResult.data.hooks.onShutdown(onShutdownContext as any);

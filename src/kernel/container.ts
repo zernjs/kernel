@@ -6,7 +6,8 @@
 
 import type { PluginId, Result } from '@/core';
 import type { BuiltPlugin, PluginRegistry } from '@/plugin';
-import { success, failure, PluginNotFoundError, PluginLoadError } from '@/core';
+import { success, failure } from '@/core';
+import { PluginNotFoundError, PluginLoadError } from '@/errors';
 import { createPluginRegistry } from '@/plugin';
 
 export interface PluginContainer {
@@ -50,7 +51,12 @@ class PluginContainerImpl implements PluginContainer {
   getInstance<TApi>(pluginName: string): Result<TApi, PluginNotFoundError> {
     const instance = this.instances.get(pluginName);
     if (!instance) {
-      return failure(new PluginNotFoundError(pluginName));
+      return failure(
+        new PluginNotFoundError({
+          plugin: pluginName,
+          availablePlugins: Array.from(this.instances.keys()),
+        })
+      );
     }
 
     return success(instance as TApi);

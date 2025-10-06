@@ -4,7 +4,8 @@
  */
 
 import type { PluginId, PluginMetadata, Result } from '@/core';
-import { success, failure, CircularDependencyError, PluginDependencyError } from '@/core';
+import { success, failure } from '@/core';
+import { CircularDependencyError, PluginDependencyError } from '@/errors';
 import { satisfiesVersion } from '@/utils';
 
 export interface DependencyResolver {
@@ -40,12 +41,17 @@ export class DependencyResolverImpl implements DependencyResolver {
         const depPlugin = pluginMap.get(dep.pluginId);
 
         if (!depPlugin) {
-          return failure(new PluginDependencyError(plugin.name, dep.pluginId));
+          return failure(
+            new PluginDependencyError({ plugin: plugin.name, dependency: dep.pluginId })
+          );
         }
 
         if (!satisfiesVersion(depPlugin.version, dep.versionRange)) {
           return failure(
-            new PluginDependencyError(plugin.name, `${dep.pluginId}@${dep.versionRange}`)
+            new PluginDependencyError({
+              plugin: plugin.name,
+              dependency: `${dep.pluginId}@${dep.versionRange}`,
+            })
           );
         }
       }
@@ -63,7 +69,7 @@ export class DependencyResolverImpl implements DependencyResolver {
         const cycle = this.dfsDetectCycleIterative(plugin.id, pluginMap, visited);
 
         if (cycle) {
-          return failure(new CircularDependencyError(cycle));
+          return failure(new CircularDependencyError({ cycle }));
         }
       }
     }

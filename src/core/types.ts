@@ -18,6 +18,7 @@ export interface KernelConfig {
   readonly initializationTimeout?: number;
   readonly extensionsEnabled?: boolean;
   readonly logLevel?: 'debug' | 'info' | 'warn' | 'error';
+  readonly errors?: import('@/errors').ErrorConfig;
 }
 
 export enum PluginState {
@@ -59,6 +60,8 @@ export interface LifecycleHookContext<
   readonly plugins: TDepsWithMeta;
   readonly store: Store<TStore>;
   readonly api?: TApi;
+  readonly phase: 'init' | 'setup' | 'ready' | 'shutdown' | 'runtime';
+  readonly method?: string;
 }
 
 export type LifecycleHook<
@@ -116,7 +119,9 @@ export function createKernelId(value: string): KernelId {
  */
 export function createVersion(value: string): Version {
   if (!isValidVersion(value)) {
-    throw new Error(`Invalid version: ${value}`);
+    throw new Error(
+      `Invalid version: ${value}. Version must follow semantic versioning (e.g., "1.0.0")`
+    );
   }
   return value as Version;
 }

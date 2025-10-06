@@ -5,7 +5,8 @@
  */
 
 import type { PluginId, PluginMetadata, Result } from '@/core';
-import { success, failure, PluginNotFoundError, PluginLoadError, PluginState } from '@/core';
+import { success, failure, PluginState } from '@/core';
+import { PluginNotFoundError, PluginLoadError } from '@/errors';
 import type { BuiltPlugin } from './plugin';
 
 export interface PluginRegistry {
@@ -48,7 +49,12 @@ export class PluginRegistryImpl implements PluginRegistry {
   >(plugin: BuiltPlugin<TName, TApi, TExt, TMetadata, TStore>): Result<void, PluginLoadError> {
     try {
       if (this.plugins.has(plugin.id)) {
-        return failure(new PluginLoadError(plugin.name, new Error('Plugin already registered')));
+        return failure(
+          new PluginLoadError({
+            plugin: plugin.name,
+            cause: new Error('Plugin already registered'),
+          })
+        );
       }
 
       this.plugins.set(
@@ -59,7 +65,7 @@ export class PluginRegistryImpl implements PluginRegistry {
 
       return success(undefined);
     } catch (error) {
-      return failure(new PluginLoadError(plugin.name, error as Error));
+      return failure(new PluginLoadError({ plugin: plugin.name, cause: error as Error }));
     }
   }
 
@@ -68,7 +74,7 @@ export class PluginRegistryImpl implements PluginRegistry {
   ): Result<BuiltPlugin<string, TApi, unknown, unknown, Record<string, any>>, PluginNotFoundError> {
     const plugin = this.plugins.get(pluginId);
     if (!plugin) {
-      return failure(new PluginNotFoundError(pluginId));
+      return failure(new PluginNotFoundError({ plugin: pluginId }));
     }
 
     return success(plugin as BuiltPlugin<string, TApi, unknown, unknown, Record<string, any>>);
@@ -79,7 +85,7 @@ export class PluginRegistryImpl implements PluginRegistry {
     const state = this.states.get(pluginId);
 
     if (!plugin || state == undefined) {
-      return failure(new PluginNotFoundError(pluginId));
+      return failure(new PluginNotFoundError({ plugin: pluginId }));
     }
 
     return success({
@@ -95,7 +101,7 @@ export class PluginRegistryImpl implements PluginRegistry {
 
   setState(pluginId: PluginId, state: PluginState): Result<void, PluginNotFoundError> {
     if (!this.plugins.has(pluginId)) {
-      return failure(new PluginNotFoundError(pluginId));
+      return failure(new PluginNotFoundError({ plugin: pluginId }));
     }
 
     this.states.set(pluginId, state);

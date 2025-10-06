@@ -1,4 +1,5 @@
 import type { Version } from '@/core';
+import { VersionError, ErrorSeverity, solution, type ErrorContext } from '@/errors';
 
 export interface SemanticVersion {
   readonly major: number;
@@ -13,7 +14,20 @@ export function parseVersion(version: Version): SemanticVersion {
   const match = version.match(regex);
 
   if (!match) {
-    throw new Error(`Invalid version format: ${version}`);
+    throw new VersionError({ version } as ErrorContext, {
+      severity: ErrorSeverity.ERROR,
+      solutions: [
+        solution(
+          'Use semantic versioning format',
+          'Version must follow MAJOR.MINOR.PATCH format',
+          '"1.0.0", "2.1.5", "1.0.0-beta.1"'
+        ),
+        solution(
+          'Check for typos',
+          'Common mistakes: missing dots, extra characters, non-numeric values'
+        ),
+      ],
+    });
   }
 
   return {
