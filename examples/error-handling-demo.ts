@@ -112,7 +112,7 @@ async function main(): Promise<void> {
           'api.fetchUser': { id: 'unknown', name: 'Unknown User', email: '' },
         },
         onError: (error, ctx) => {
-          console.log(`[BOUNDARY] Caught error in ${ctx.plugin}.${ctx.method}`);
+          console.log(`[BOUNDARY] Caught error in ${ctx.pluginName}.${ctx.method}`);
         },
       })
     )

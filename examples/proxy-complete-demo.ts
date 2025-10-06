@@ -59,7 +59,7 @@ const loggingPlugin = plugin('logging', '1.0.0')
     // ✅ CASE 2: Proxy specific plugin (must be in depends)
     include: ['multiply'],
     before: ctx => {
-      console.log(`  📋 [LOGGING] Proxying ${ctx.plugin}.${ctx.method}`);
+      console.log(`  📋 [LOGGING] Proxying ${ctx.pluginName}.${ctx.method}`);
     },
     after: (result, ctx) => {
       console.log(`  📋 [LOGGING] ${ctx.method} returned: ${result}`);
@@ -82,12 +82,12 @@ const timingPlugin = plugin('timing', '1.0.0')
     // ✅ CASE 3: Proxy ALL dependencies (math + api)
     // Note: ctx.store is the target plugin's store, not timing plugin's
     before: (ctx): void => {
-      const key = `${ctx.plugin}.${ctx.method}`;
+      const key = `${ctx.pluginName}.${ctx.method}`;
       timingMap.set(key, Date.now());
       console.log(`  ⏱️  [TIMING] Started ${key}`);
     },
     after: (result, ctx): unknown => {
-      const key = `${ctx.plugin}.${ctx.method}`;
+      const key = `${ctx.pluginName}.${ctx.method}`;
       const startTime = timingMap.get(key);
       if (startTime) {
         const duration = Date.now() - startTime;
@@ -108,7 +108,7 @@ const globalMonitorPlugin = plugin('global-monitor', '1.0.0')
     // ✅ CASE 4: Proxy ALL plugins in kernel (math, api, db, logging, timing)
     priority: 100, // Execute first
     before: ctx => {
-      console.log(`  🌍 [GLOBAL] Monitoring ${ctx.plugin}.${ctx.method}()`);
+      console.log(`  🌍 [GLOBAL] Monitoring ${ctx.pluginName}.${ctx.method}()`);
     },
   })
   .setup(() => ({}));

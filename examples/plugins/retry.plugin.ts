@@ -51,7 +51,7 @@ export function createRetryPlugin(options: RetryOptions) {
             }
 
             console.log(
-              `[RETRY] Attempt ${attempt}/${options.maxAttempts} failed for ${ctx.plugin}.${ctx.method}. Retrying in ${delay}ms...`
+              `[RETRY] Attempt ${attempt}/${options.maxAttempts} failed for ${ctx.pluginName}.${ctx.method}. Retrying in ${delay}ms...`
             );
 
             await new Promise(resolve => setTimeout(resolve, delay));

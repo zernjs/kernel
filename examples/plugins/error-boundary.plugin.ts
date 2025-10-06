@@ -24,7 +24,7 @@ export function createErrorBoundaryPlugin(options: ErrorBoundaryOptions) {
           return await next();
         } catch (error) {
           caughtErrors.push({
-            plugin: ctx.plugin,
+            plugin: ctx.pluginName,
             method: ctx.method,
             error: error as Error,
             timestamp: new Date(),
@@ -35,11 +35,11 @@ export function createErrorBoundaryPlugin(options: ErrorBoundaryOptions) {
           }
 
           console.warn(
-            `[ERROR BOUNDARY] Caught error in ${ctx.plugin}.${ctx.method}:`,
+            `[ERROR BOUNDARY] Caught error in ${ctx.pluginName}.${ctx.method}:`,
             (error as Error).message
           );
 
-          const fallbackKey = `${ctx.plugin}.${ctx.method}`;
+          const fallbackKey = `${ctx.pluginName}.${ctx.method}`;
           if (fallbackKey in fallback) {
             console.log(`[ERROR BOUNDARY] Returning configured fallback for ${fallbackKey}`);
             return fallback[fallbackKey];

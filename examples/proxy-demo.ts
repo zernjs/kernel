@@ -49,12 +49,12 @@ const timingPlugin = plugin('timing', '1.0.0')
   .depends(apiPlugin, '^1.0.0') // ✅ Required for proxy!
   .proxy(apiPlugin, {
     before: ctx => {
-      const key = `${ctx.plugin}.${ctx.method}`;
+      const key = `${ctx.pluginName}.${ctx.method}`;
       ctx.store.set(key, Date.now());
       console.log(`⏱️  [TIMING] Starting ${ctx.method}...`);
     },
     after: (result, ctx) => {
-      const key = `${ctx.plugin}.${ctx.method}`;
+      const key = `${ctx.pluginName}.${ctx.method}`;
       const startTime = ctx.store.get(key);
       if (startTime) {
         const duration = Date.now() - startTime;

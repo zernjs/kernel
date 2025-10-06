@@ -29,7 +29,7 @@ export function createTelemetryPlugin(options: TelemetryOptions) {
         const zernError = error instanceof ZernError ? error : null;
 
         if (zernError) {
-          zernError.context.plugin = ctx.plugin;
+          zernError.context.plugin = ctx.pluginName;
           zernError.context.method = ctx.method;
 
           errorCount++;

@@ -63,7 +63,7 @@ async function main(): Promise<void> {
     // ✅ Kernel-level proxy for mathPlugin specifically
     .proxy(mathPlugin, {
       before: ctx => {
-        console.log(`  🔧 [KERNEL-PROXY] Intercepting ${ctx.plugin}.${ctx.method}`);
+        console.log(`  🔧 [KERNEL-PROXY] Intercepting ${ctx.pluginName}.${ctx.method}`);
       },
       after: (result, ctx) => {
         console.log(`  🔧 [KERNEL-PROXY] ${ctx.method} returned: ${result}`);
@@ -99,7 +99,7 @@ async function main(): Promise<void> {
     .proxy('**', {
       priority: 100,
       before: ctx => {
-        console.log(`  🌍 [KERNEL-GLOBAL] ${ctx.plugin}.${ctx.method}() called`);
+        console.log(`  🌍 [KERNEL-GLOBAL] ${ctx.pluginName}.${ctx.method}() called`);
       },
     })
     .start();
@@ -138,12 +138,12 @@ async function main(): Promise<void> {
     .proxy('**', {
       priority: 50,
       before: (ctx): void => {
-        const key = `${ctx.plugin}.${ctx.method}`;
+        const key = `${ctx.pluginName}.${ctx.method}`;
         timings.set(key, Date.now());
         console.log(`  ⏱️  [TIMING] Started ${key}`);
       },
       after: (result, ctx): unknown => {
-        const key = `${ctx.plugin}.${ctx.method}`;
+        const key = `${ctx.pluginName}.${ctx.method}`;
         const startTime = timings.get(key);
         if (startTime) {
           const duration = Date.now() - startTime;
