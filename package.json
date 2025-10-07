@@ -1,6 +1,6 @@
 {
   "name": "@zern/kernel",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "Ultra-lightweight plugin engine with natural DX and auto-extensibility",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
