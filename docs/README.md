@@ -54,17 +54,35 @@ Zern Kernel is a **plugin orchestration system** that provides:
 import { createKernel, plugin } from '@zern/kernel';
 
 // 1. Define plugins
-const mathPlugin = plugin('math', '1.0.0').setup(() => ({
-  add: (a: number, b: number) => a + b,
-  multiply: (a: number, b: number) => a * b,
-}));
+const mathPlugin = plugin('math', '1.0.0')
+  .metadata({ author: 'Zern Team' })
+  .store(() => ({ count: 0 }))
+  .setup(({ store }) => ({
+    add: (a: number, b: number) => {
+      store.count++;
+      return a + b;
+    },
+    multiply: (a: number, b: number) => a * b,
+  }));
 
 // 2. Initialize kernel
 export const kernel = await createKernel().use(mathPlugin).start();
 
-// 3. Use with full type safety!
+// 3. Use with full type safety + $meta + $store!
 const math = kernel.get('math');
+
+// API methods
 console.log(math.add(2, 3)); // ✅ Autocomplete works!
+
+// Access metadata
+console.log(math.$meta.name); // "math"
+console.log(math.$meta.author); // "Zern Team"
+
+// Access reactive store
+console.log(math.$store.count); // 1
+math.$store.watch('count', change => {
+  console.log(`Count: ${change.newValue}`);
+});
 ```
 
 ---

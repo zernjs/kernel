@@ -177,7 +177,7 @@ const math = kernel.get('math');
 
 ## 📦 Kernel Instance API
 
-### `.get(name)` - Get Plugin API
+### `.get(name)` - Get Plugin API with $meta and $store
 
 ```typescript
 interface Kernel<TPlugins> {
@@ -188,8 +188,8 @@ interface Kernel<TPlugins> {
 **Example:**
 
 ```typescript
-const math = kernel.get('math'); // ✅ Type: MathAPI
-const calc = kernel.get('calculator'); // ✅ Type: CalculatorAPI
+const math = kernel.get('math'); // ✅ Type: MathAPI & { $meta, $store }
+const calc = kernel.get('calculator'); // ✅ Type: CalculatorAPI & { $meta, $store }
 
 // TypeScript error:
 const unknown = kernel.get('unknown'); // ❌ Error: 'unknown' not in kernel
@@ -197,9 +197,115 @@ const unknown = kernel.get('unknown'); // ❌ Error: 'unknown' not in kernel
 
 **Key Points:**
 
-- Fully type-safe
-- Returns initialized plugin API
+- Fully type-safe with complete autocomplete
+- Returns initialized plugin API **plus** `$meta` and `$store`
 - Throws `PluginNotFoundError` if plugin doesn't exist
+
+**Accessing Plugin Metadata and Store:**
+
+```typescript
+const logger = kernel.get('logger');
+
+// ✅ Use the API
+logger.log('Hello World!');
+
+// ✅ Access metadata
+console.log(logger.$meta.name); // "logger"
+console.log(logger.$meta.version); // "1.0.0"
+console.log(logger.$meta.author); // Custom metadata
+
+// ✅ Access and modify the store
+console.log(logger.$store.count); // Access reactive state
+logger.$store.count++; // Modify state
+
+// ✅ Watch store changes
+logger.$store.watch('count', change => {
+  console.log(`Count changed: ${change.oldValue} → ${change.newValue}`);
+});
+
+// ✅ Use all Store methods
+logger.$store.batch(() => {
+  logger.$store.count++;
+  logger.$store.errors++;
+});
+
+const doubled = logger.$store.computed(s => s.count * 2);
+console.log(doubled.value);
+```
+
+**Complete Example:**
+
+```typescript
+// Define plugin with metadata and store
+const mathPlugin = plugin('math', '1.0.0')
+  .metadata({
+    author: 'Zern Team',
+    precision: 'high',
+  })
+  .store(() => ({
+    operationCount: 0,
+    lastResult: 0,
+  }))
+  .setup(({ store }) => ({
+    add: (a: number, b: number) => {
+      store.operationCount++;
+      store.lastResult = a + b;
+      return a + b;
+    },
+  }));
+
+// Start kernel
+const kernel = await createKernel().use(mathPlugin).start();
+
+// Get plugin with full access
+const math = kernel.get('math');
+
+// Use API
+const result = math.add(10, 5); // 15
+
+// Access metadata (read-only)
+console.log(math.$meta.name); // "math"
+console.log(math.$meta.version); // "1.0.0"
+console.log(math.$meta.author); // "Zern Team"
+console.log(math.$meta.precision); // "high"
+
+// Access store (reactive)
+console.log(math.$store.operationCount); // 1
+console.log(math.$store.lastResult); // 15
+
+// Watch store changes
+math.$store.watch('operationCount', change => {
+  console.log(`Operations: ${change.newValue}`);
+});
+
+math.add(20, 30); // Triggers watcher
+```
+
+**What's included:**
+
+| Property        | Type       | Description                                      |
+| --------------- | ---------- | ------------------------------------------------ |
+| **API methods** | `TApi`     | All plugin methods (add, multiply, etc.)         |
+| **`$meta`**     | `Metadata` | Plugin metadata (name, version, custom metadata) |
+| **`$store`**    | `Store<T>` | Complete reactive store with all Store methods   |
+
+**Store Methods Available:**
+
+When accessing `$store` from `kernel.get()`, you have the complete `Store` API:
+
+- `watch(key, callback)` - Watch specific property changes
+- `watchAll(callback)` - Watch all changes
+- `watchBatch(callback)` - Watch batched changes
+- `batch(fn)` - Batch multiple updates
+- `transaction(fn)` - Atomic transactions with rollback
+- `computed(selector)` - Create computed values
+- `select(selector)` - Alias for computed
+- `getHistory()` - Get change history (if enabled)
+- `clearHistory()` - Clear history
+- `getMetrics()` - Get performance metrics (if enabled)
+- `clearWatchers()` - Remove all watchers
+
+See [Store System](./13-store-system.md) for complete Store API documentation.
 
 ### `.shutdown()` - Graceful Shutdown
 

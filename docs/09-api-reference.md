@@ -164,11 +164,63 @@ Initialized kernel instance.
 
 #### `.get(name)`
 
-Gets a plugin API by name.
+Gets a plugin API by name with full access to `$meta` and `$store`.
 
 ```typescript
 get<TName extends keyof TPlugins>(name: TName): TPlugins[TName];
 ```
+
+**Returns:** Plugin API combined with:
+
+- **API methods** - All plugin methods (fully typed)
+- **`$meta`** - Plugin metadata (name, version, and custom metadata)
+- **`$store`** - Complete reactive store with all Store methods
+
+**Example:**
+
+```typescript
+const logger = kernel.get('logger');
+
+// ✅ Use API methods
+logger.log('Hello!');
+logger.error('Something went wrong');
+
+// ✅ Access metadata
+console.log(logger.$meta.name); // "logger"
+console.log(logger.$meta.version); // "1.0.0"
+console.log(logger.$meta.author); // Custom metadata (if defined)
+
+// ✅ Access and watch store
+console.log(logger.$store.logCount);
+logger.$store.watch('logCount', change => {
+  console.log(`Logs: ${change.newValue}`);
+});
+
+// ✅ Use Store methods
+logger.$store.batch(() => {
+  logger.$store.logCount++;
+  logger.$store.errorCount++;
+});
+```
+
+**What's available:**
+
+| Property            | Type       | Description                                 |
+| ------------------- | ---------- | ------------------------------------------- |
+| API methods         | `TApi`     | All plugin methods with full type safety    |
+| `$meta.name`        | `string`   | Plugin name                                 |
+| `$meta.version`     | `string`   | Plugin version                              |
+| `$meta.*`           | `any`      | Custom metadata (defined via `.metadata()`) |
+| `$store.*`          | `TStore`   | Reactive state properties                   |
+| `$store.watch()`    | `Function` | Watch property changes                      |
+| `$store.watchAll()` | `Function` | Watch all changes                           |
+| `$store.batch()`    | `Function` | Batch multiple updates                      |
+| `$store.computed()` | `Function` | Create computed values                      |
+| ...                 | ...        | All other Store methods                     |
+
+See [Store System](./13-store-system.md) for complete `$store` API documentation.
+
+**Throws:** `PluginNotFoundError` if plugin doesn't exist
 
 #### `.shutdown()`
 
