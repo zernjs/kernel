@@ -99,13 +99,26 @@ export type PluginWithMetadata<TApi, TName extends string, TVersion, TId, TMetad
 type ExtractMetadata<T> = T extends { __meta__?: infer M } ? M : Record<string, never>;
 
 /**
- * Removes the __meta__ marker from the API type
+ * Extracts the store type from a dependency
  */
-type CleanApi<T> = T extends { __meta__?: unknown } ? Omit<T, '__meta__'> : T;
+type ExtractStore<T> = T extends { __store__?: infer S extends Record<string, any> }
+  ? S
+  : Record<string, any>;
 
 /**
- * Adds $meta to each plugin dependency (for lifecycle hooks)
- * Each plugin will have: API & { $meta: { name, version, id, ...customMetadata } }
+ * Removes the __meta__ and __store__ markers from the API type
+ */
+type CleanApi<T> = T extends { __meta__?: unknown; __store__?: unknown }
+  ? Omit<T, '__meta__' | '__store__'>
+  : T extends { __meta__?: unknown }
+    ? Omit<T, '__meta__'>
+    : T extends { __store__?: unknown }
+      ? Omit<T, '__store__'>
+      : T;
+
+/**
+ * Adds $meta and $store to each plugin dependency (for lifecycle hooks and setup context)
+ * Each plugin will have: API & { $meta: { name, version, id, ...customMetadata }, $store: Store<TStoreType> }
  */
 export type DepsWithMetadata<TDeps> = {
   [K in keyof TDeps]: CleanApi<TDeps[K]> & {
@@ -114,6 +127,7 @@ export type DepsWithMetadata<TDeps> = {
       readonly version: unknown;
       readonly id: unknown;
     } & ExtractMetadata<TDeps[K]>;
+    readonly $store: import('@/store').Store<ExtractStore<TDeps[K]>>;
   };
 };
 

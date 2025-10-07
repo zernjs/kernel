@@ -35,7 +35,12 @@ class LifecycleManagerImpl implements LifecycleManager {
   private initializationOrder: string[] = [];
 
   /**
-   * Builds the plugins object with metadata for lifecycle hooks
+   * Builds the plugins object with metadata and store for lifecycle hooks
+   *
+   * Returns plugins with:
+   * - API methods (all plugin methods)
+   * - $meta (name, version, id, custom metadata)
+   * - $store (complete Store object with watch, computed, batch, etc.)
    */
   private buildPluginsWithMetadata(
     container: PluginContainer,
@@ -50,19 +55,22 @@ class LifecycleManagerImpl implements LifecycleManager {
 
       if (depInstance.success && depMetadata.success) {
         const apiData = depInstance.data as Record<string, unknown>;
+        const pluginData = depMetadata.data;
+
         const customMetadata =
-          typeof depMetadata.data.metadata === 'object' && depMetadata.data.metadata !== null
-            ? depMetadata.data.metadata
+          typeof pluginData.metadata === 'object' && pluginData.metadata !== null
+            ? pluginData.metadata
             : {};
 
         plugins[dep.pluginId] = {
           ...apiData,
           $meta: {
-            name: depMetadata.data.name,
-            version: depMetadata.data.version,
-            id: depMetadata.data.id,
+            name: pluginData.name,
+            version: pluginData.version,
+            id: pluginData.id,
             ...customMetadata,
           },
+          $store: pluginData.store,
         };
       }
     }
@@ -362,15 +370,6 @@ class LifecycleManagerImpl implements LifecycleManager {
 
       const plugin = pluginResult.data;
 
-      const deps: Record<string, unknown> = {};
-      for (const dep of plugin.dependencies) {
-        const depInstance = container.getInstance(dep.pluginId);
-        if (!depInstance.success) {
-          throw depInstance.error;
-        }
-        deps[dep.pluginId] = depInstance.data;
-      }
-
       const kernelContext: KernelContext = {
         id: createKernelId('kernel'),
         config,
@@ -383,6 +382,12 @@ class LifecycleManagerImpl implements LifecycleManager {
 
       const pluginsWithMetadata = this.buildPluginsWithMetadata(container, plugin.dependencies);
 
+      const instance = plugin.setupFn({
+        plugins: pluginsWithMetadata,
+        kernel: kernelContext,
+        store: plugin.store,
+      });
+
       if (plugin.hooks.onInit) {
         const onInitContext = {
           pluginName,
@@ -394,12 +399,6 @@ class LifecycleManagerImpl implements LifecycleManager {
         };
         await plugin.hooks.onInit(onInitContext as any);
       }
-
-      const instance = plugin.setupFn({
-        plugins: deps,
-        kernel: kernelContext,
-        store: plugin.store,
-      });
 
       let finalInstance = instance;
       if (config.extensionsEnabled) {

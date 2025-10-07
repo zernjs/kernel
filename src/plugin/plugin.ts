@@ -195,7 +195,7 @@ export interface PluginBuilder<
   ): PluginBuilder<
     TName,
     TApi,
-    TDeps & Record<TDepName, TDepApi & { __meta__?: TDepMetadata }>,
+    TDeps & Record<TDepName, TDepApi & { __meta__?: TDepMetadata; __store__?: TDepStore }>,
     TExtMap,
     TMetadata,
     TStore
