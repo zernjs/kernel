@@ -46,19 +46,19 @@
 
 ### Core Capabilities
 
-| Feature                           | Description                                                               |
-| --------------------------------- | ------------------------------------------------------------------------- |
-| 🪶 **Minimal Core**               | Only essential functionality - register, initialize, shutdown             |
-| 🔄 **Fluent API**                 | Clean, chainable interface for plugin and kernel configuration            |
-| 🤖 **Auto Dependency Resolution** | Topological sorting with intelligent cycle detection                      |
-| 🔧 **API Extensions**             | Plugins can seamlessly extend other plugins' APIs                         |
-| 🎭 **Method Proxying**            | Intercept and modify behavior with before/after/around hooks              |
-| ⏱️ **Lifecycle Hooks**            | `onInit`, `onReady`, `onShutdown`, `onError` for resource management      |
-| 🗄️ **Reactive Store**             | Automatic reactive state with watchers, computed values, and transactions |
-| 🏷️ **Custom Metadata**            | Attach and access metadata with full type safety via `$meta`              |
-| 📦 **Direct Exports**             | Import plugin methods directly like a normal library                      |
-| 🛡️ **Error Handling**             | Hierarchical typed errors with stack traces, solutions, and severities    |
-| 🔍 **Version Control**            | Semantic versioning with flexible constraint matching                     |
+| Feature                           | Description                                                                |
+| --------------------------------- | -------------------------------------------------------------------------- |
+| 🪶 **Minimal Core**               | Only essential functionality - register, initialize, shutdown              |
+| 🔄 **Fluent API**                 | Clean, chainable interface for plugin and kernel configuration             |
+| 🤖 **Auto Dependency Resolution** | Topological sorting with intelligent cycle detection                       |
+| 🔧 **API Extensions**             | Plugins can seamlessly extend other plugins' APIs                          |
+| 🎭 **Method Proxying**            | Intercept and modify behavior with before/after/around hooks               |
+| ⏱️ **Lifecycle Hooks**            | `onInit`, `onReady`, `onShutdown`, `onError` for resource management       |
+| 🗄️ **Reactive Store**             | Automatic reactive state with watchers, computed values, and transactions  |
+| 🏷️ **Complete Plugin Access**     | `kernel.get()` returns API + `$meta` + `$store` for full plugin inspection |
+| 📦 **Direct Exports**             | Import plugin methods directly like a normal library                       |
+| 🛡️ **Error Handling**             | Hierarchical typed errors with stack traces, solutions, and severities     |
+| 🔍 **Version Control**            | Semantic versioning with flexible constraint matching                      |
 
 ### Advanced Features
 
@@ -121,9 +121,13 @@ const authPlugin = plugin('auth', '1.0.0')
 // 3️⃣ Initialize kernel and use plugins
 const kernel = await createKernel().use(databasePlugin).use(authPlugin).start();
 
-// ✅ Type-safe plugin access
+// ✅ Type-safe plugin access with $meta and $store
 const db = kernel.get('database');
 await db.connect('postgresql://localhost:5432/mydb');
+
+// Access metadata
+console.log(db.$meta.author); // "Zern Team"
+console.log(db.$meta.category); // "data"
 
 const user = await db.users.create({
   name: 'John Doe',
@@ -329,7 +333,81 @@ const databasePlugin = plugin('database', '1.0.0')
   }));
 ```
 
-### 8. Direct Method Exports
+### 8. Accessing Plugin Metadata and Store
+
+`kernel.get()` returns **complete plugin access** - API methods, metadata, and reactive store:
+
+```typescript
+const mathPlugin = plugin('math', '1.0.0')
+  .metadata({
+    author: 'Zern Team',
+    category: 'utilities',
+    precision: 'high',
+  })
+  .store(() => ({
+    operationCount: 0,
+    lastResult: 0,
+  }))
+  .setup(({ store }) => ({
+    add: (a: number, b: number) => {
+      store.operationCount++;
+      store.lastResult = a + b;
+      return a + b;
+    },
+  }));
+
+const kernel = await createKernel().use(mathPlugin).start();
+const math = kernel.get('math');
+
+// ✅ Use API methods
+const result = math.add(10, 5); // 15
+
+// ✅ Access metadata (read-only)
+console.log(math.$meta.name); // "math"
+console.log(math.$meta.version); // "1.0.0"
+console.log(math.$meta.author); // "Zern Team"
+console.log(math.$meta.precision); // "high"
+
+// ✅ Access and modify reactive store
+console.log(math.$store.operationCount); // 1
+console.log(math.$store.lastResult); // 15
+
+// ✅ Watch store changes
+math.$store.watch('operationCount', change => {
+  console.log(`Operations: ${change.oldValue} → ${change.newValue}`);
+});
+
+// ✅ Use all Store methods
+math.$store.batch(() => {
+  math.$store.operationCount++;
+  math.$store.lastResult = 100;
+});
+
+const doubled = math.$store.computed(s => s.operationCount * 2);
+console.log(doubled.value); // 4
+
+// Next operation triggers watcher
+math.add(20, 30); // Logs: "Operations: 2 → 3"
+```
+
+**Available on every plugin:**
+
+| Property               | Description                              | Example                                            |
+| ---------------------- | ---------------------------------------- | -------------------------------------------------- |
+| API methods            | All plugin methods with full type safety | `math.add(1, 2)`                                   |
+| `$meta.name`           | Plugin name                              | `"math"`                                           |
+| `$meta.version`        | Plugin version                           | `"1.0.0"`                                          |
+| `$meta.*`              | Custom metadata                          | `math.$meta.author`                                |
+| `$store.*`             | Reactive state properties                | `math.$store.count`                                |
+| `$store.watch()`       | Watch specific property                  | `math.$store.watch('count', fn)`                   |
+| `$store.watchAll()`    | Watch all changes                        | `math.$store.watchAll(fn)`                         |
+| `$store.batch()`       | Batch multiple updates                   | `math.$store.batch(() => {...})`                   |
+| `$store.computed()`    | Create computed values                   | `math.$store.computed(s => s.x * 2)`               |
+| `$store.transaction()` | Atomic updates with rollback             | `await math.$store.transaction(async () => {...})` |
+
+> 📚 See [Kernel Layer](./docs/04-kernel-layer.md#get-name---get-plugin-api-with-meta-and-store) and [Store System](./docs/13-store-system.md) for complete documentation
+
+### 9. Direct Method Exports
 
 Use plugins like normal libraries:
 
@@ -352,7 +430,7 @@ console.log(add(2, 3)); // ✅ Full type safety!
 console.log(multiply(4, 5)); // ✅ Autocomplete works!
 ```
 
-### 9. Error Handling
+### 10. Error Handling
 
 Professional error handling with typed errors, stack traces, and actionable solutions:
 
@@ -656,8 +734,29 @@ createKernel()
 ### Using Kernel
 
 ```typescript
-kernel.get(name: string)      // Get plugin API
+kernel.get(name: string)      // Get plugin API + $meta + $store
 kernel.shutdown()             // Shutdown all plugins
+```
+
+**What `kernel.get()` returns:**
+
+```typescript
+const plugin = kernel.get('myPlugin');
+
+// ✅ API methods (fully typed)
+plugin.myMethod();
+
+// ✅ Metadata access
+plugin.$meta.name; // Plugin name
+plugin.$meta.version; // Plugin version
+plugin.$meta.author; // Custom metadata
+
+// ✅ Reactive store access
+plugin.$store.count; // Read state
+plugin.$store.count++; // Update state
+plugin.$store.watch('count', change => {
+  console.log(`Changed: ${change.newValue}`);
+});
 ```
 
 ---
