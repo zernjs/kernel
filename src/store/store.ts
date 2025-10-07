@@ -706,7 +706,7 @@ export function createStore<TStore extends Record<string, any>>(
           timestamp: new Date(),
         };
 
-        void notifyChange(proxy, change);
+        void notifyChange(target, change);
       }
 
       return true;
