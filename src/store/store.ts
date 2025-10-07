@@ -211,7 +211,6 @@ function getTotalWatcherCount(state: StoreState<any>): number {
 function addWatcher(state: StoreState<any>, watcher: Watcher): void {
   const currentTotal = getTotalWatcherCount(state);
 
-  // Check global limit
   if (currentTotal >= state.options.maxWatchers) {
     throw new Error(
       `Maximum watchers limit reached (${state.options.maxWatchers}). ` +
@@ -256,7 +255,7 @@ function addWatcher(state: StoreState<any>, watcher: Watcher): void {
   if (
     state.options.warnOnHighWatcherCount &&
     currentTotal > state.options.warnThreshold &&
-    currentTotal % 100 === 0 // Only warn every 100 watchers
+    currentTotal % 100 === 0
   ) {
     console.warn(
       `High total watcher count: ${currentTotal} watchers active. ` +

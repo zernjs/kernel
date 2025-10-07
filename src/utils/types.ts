@@ -151,3 +151,15 @@ export type ProxyPluginsMapForKernel<U> = {
     MetadataForName<U, K>
   >;
 };
+
+/**
+ * Computes the plugins map for kernel.get() with $store and $meta access
+ * Similar to ProxyPluginAccess but for direct kernel access
+ */
+export type KernelPluginsMap<U> = {
+  [K in PluginNameOf<U>]: ProxyPluginAccess<
+    ApiForName<U, K> & ExtensionsForName<U, K>,
+    StoreForName<U, K>,
+    MetadataForName<U, K>
+  >;
+};

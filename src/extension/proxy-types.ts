@@ -467,7 +467,7 @@ export type ProxyTarget = PluginId | 'self' | '*' | '**';
 
 export interface ProxyMetadata {
   readonly targetPluginId: ProxyTarget;
-  readonly sourcePluginId?: PluginId; // Who registered this proxy
+  readonly sourcePluginId?: PluginId;
   readonly config: ProxyConfig<any>;
 }
 

@@ -23,6 +23,17 @@ export interface PluginContainer {
 
   getInstance<TApi>(pluginName: string): Result<TApi, PluginNotFoundError>;
 
+  getInstanceWithMeta<TApi, TStore extends Record<string, any>, TMetadata>(
+    pluginName: string
+  ): Result<
+    {
+      api: TApi;
+      store: import('@/store').Store<TStore>;
+      metadata: TMetadata & { name: string; version: string };
+    },
+    PluginNotFoundError
+  >;
+
   setInstance<TApi>(pluginName: string, instance: TApi): Result<void, PluginNotFoundError>;
 
   hasInstance(pluginName: string): boolean;
@@ -60,6 +71,46 @@ class PluginContainerImpl implements PluginContainer {
     }
 
     return success(instance as TApi);
+  }
+
+  getInstanceWithMeta<TApi, TStore extends Record<string, any>, TMetadata>(
+    pluginName: string
+  ): Result<
+    {
+      api: TApi;
+      store: import('@/store').Store<TStore>;
+      metadata: TMetadata & { name: string; version: string };
+    },
+    PluginNotFoundError
+  > {
+    const instance = this.instances.get(pluginName);
+    if (!instance) {
+      return failure(
+        new PluginNotFoundError({
+          plugin: pluginName,
+          availablePlugins: Array.from(this.instances.keys()),
+        })
+      );
+    }
+
+    const pluginResult = this.registry.get(pluginName as PluginId);
+    if (!pluginResult.success) {
+      return failure(pluginResult.error);
+    }
+
+    const plugin = pluginResult.data;
+
+    const metadata = {
+      name: plugin.name,
+      version: plugin.version,
+      ...(typeof plugin.metadata === 'object' && plugin.metadata !== null ? plugin.metadata : {}),
+    } as TMetadata & { name: string; version: string };
+
+    return success({
+      api: instance as TApi,
+      store: plugin.store as import('@/store').Store<TStore>,
+      metadata,
+    });
   }
 
   setInstance<TApi>(pluginName: string, instance: TApi): Result<void, PluginNotFoundError> {

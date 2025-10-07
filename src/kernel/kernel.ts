@@ -8,7 +8,7 @@ import { PluginContainer, createPluginContainer } from './container';
 import { LifecycleManager, createLifecycleManager } from './lifecycle';
 import { createExtensionManager } from '@/extension';
 import { setGlobalKernel } from '@/hooks';
-import type { PluginsMap } from '@/utils/types';
+import type { KernelPluginsMap } from '@/utils/types';
 import type { ProxyConfig, ProxyMetadata, ProxyGlobalWildcard } from '@/extension/proxy-types';
 import { validateProxyConfig } from '@/extension/proxy-types';
 
@@ -174,7 +174,7 @@ export interface KernelBuilder<
    *
    * @returns Built kernel ready for initialization
    */
-  build(): BuiltKernel<PluginsMap<U>>;
+  build(): BuiltKernel<KernelPluginsMap<U>>;
 
   /**
    * Builds and initializes the kernel with all plugins.
@@ -189,9 +189,10 @@ export interface KernelBuilder<
    *   .start();
    *
    * const db = kernel.get('database');
+   * // db has: API methods + db.$meta + db.$store
    * ```
    */
-  start(): Promise<Kernel<PluginsMap<U>>>;
+  start(): Promise<Kernel<KernelPluginsMap<U>>>;
 }
 
 class KernelBuilderImpl<
@@ -267,17 +268,17 @@ class KernelBuilderImpl<
     return this as unknown as KernelBuilder<U>;
   }
 
-  build(): BuiltKernel<PluginsMap<U>> {
+  build(): BuiltKernel<KernelPluginsMap<U>> {
     return new BuiltKernelImpl<U>(this.plugins, this.kernelProxies, this.kernelConfig);
   }
 
-  async start(): Promise<Kernel<PluginsMap<U>>> {
+  async start(): Promise<Kernel<KernelPluginsMap<U>>> {
     return this.build().init();
   }
 }
 
 class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, Record<string, any>>>
-  implements BuiltKernel<PluginsMap<U>>
+  implements BuiltKernel<KernelPluginsMap<U>>
 {
   constructor(
     private readonly plugins: readonly BuiltPlugin<
@@ -290,7 +291,7 @@ class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, R
     private readonly kernelProxies: readonly ProxyMetadata[],
     private readonly kernelConfig: KernelConfig
   ) {}
-  async init(): Promise<Kernel<PluginsMap<U>>> {
+  async init(): Promise<Kernel<KernelPluginsMap<U>>> {
     try {
       const kernelId = createKernelId(`kernel-${Date.now()}`);
 
@@ -316,7 +317,7 @@ class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, R
         throw initResult.error;
       }
 
-      const kernel = new KernelImpl<PluginsMap<U>>(
+      const kernel = new KernelImpl<KernelPluginsMap<U>>(
         kernelId,
         this.kernelConfig,
         container,
@@ -324,7 +325,7 @@ class BuiltKernelImpl<U extends BuiltPlugin<string, unknown, unknown, unknown, R
       );
 
       if (this.kernelConfig.autoGlobal) {
-        setGlobalKernel(kernel as Kernel<PluginsMap<U>>);
+        setGlobalKernel(kernel as Kernel<KernelPluginsMap<U>>);
       }
 
       return kernel;
@@ -343,11 +344,20 @@ class KernelImpl<TPlugins> implements Kernel<TPlugins> {
   ) {}
 
   get<TName extends keyof TPlugins>(name: TName): TPlugins[TName] {
-    const result = this.container.getInstance(name as string);
+    const result = this.container.getInstanceWithMeta(name as string);
     if (!result.success) {
       throw result.error;
     }
-    return result.data as TPlugins[TName];
+
+    const { api, store, metadata } = result.data;
+
+    const combined = {
+      ...(typeof api === 'object' && api !== null ? api : {}),
+      $meta: metadata,
+      $store: store,
+    };
+
+    return combined as TPlugins[TName];
   }
 
   async shutdown(): Promise<void> {
