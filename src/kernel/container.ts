@@ -34,6 +34,8 @@ export interface PluginContainer {
     PluginNotFoundError
   >;
 
+  getOriginalInstance<TApi>(pluginName: string): Result<TApi, PluginNotFoundError>;
+
   setInstance<TApi>(pluginName: string, instance: TApi): Result<void, PluginNotFoundError>;
 
   hasInstance(pluginName: string): boolean;
@@ -44,6 +46,7 @@ export interface PluginContainer {
 class PluginContainerImpl implements PluginContainer {
   private registry: PluginRegistry;
   private instances = new Map<string, unknown>();
+  private originalInstances = new Map<string, unknown>();
 
   constructor() {
     this.registry = createPluginRegistry();
@@ -119,8 +122,20 @@ class PluginContainerImpl implements PluginContainer {
       return failure(pluginResult.error);
     }
 
+    if (!this.originalInstances.has(pluginName)) {
+      this.originalInstances.set(pluginName, instance);
+    }
+
     this.instances.set(pluginName, instance);
     return success(undefined);
+  }
+
+  getOriginalInstance<TApi>(pluginName: string): Result<TApi, PluginNotFoundError> {
+    const instance = this.originalInstances.get(pluginName);
+    if (!instance) {
+      return this.getInstance(pluginName);
+    }
+    return success(instance as TApi);
   }
 
   hasInstance(pluginName: string): boolean {

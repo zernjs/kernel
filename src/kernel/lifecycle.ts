@@ -94,21 +94,9 @@ class LifecycleManagerImpl implements LifecycleManager {
                 config: proxy.config,
               });
             } else if (proxy.targetPluginId === '*') {
-              for (const dep of pluginMeta.dependencies) {
-                extensions.registerProxy({
-                  targetPluginId: dep.pluginId,
-                  sourcePluginId: pluginMeta.id,
-                  config: proxy.config,
-                });
-              }
+              continue;
             } else if (proxy.targetPluginId === '**') {
-              for (const targetPlugin of plugins) {
-                extensions.registerProxy({
-                  targetPluginId: targetPlugin.id,
-                  sourcePluginId: pluginMeta.id,
-                  config: proxy.config,
-                });
-              }
+              continue;
             } else {
               extensions.registerProxy({
                 ...proxy,
@@ -135,6 +123,8 @@ class LifecycleManagerImpl implements LifecycleManager {
         await this.initializePlugin(pluginName, container, extensions, config);
       }
 
+      await this.reapplyWildcardProxies(container, extensions, config);
+
       if (kernelProxies.length > 0) {
         await this.applyKernelProxies(kernelProxies, container, extensions, config);
       }
@@ -142,6 +132,130 @@ class LifecycleManagerImpl implements LifecycleManager {
       return success(undefined);
     } catch (error) {
       return failure(new KernelInitializationError({ cause: error as Error }));
+    }
+  }
+
+  /**
+   * Applies wildcard proxies ('*' and '**') after all plugins are initialized.
+   * This ensures that ctx.plugins has access to ALL plugins, not just those
+   * initialized before the current plugin.
+   */
+  private async reapplyWildcardProxies(
+    container: PluginContainer,
+    extensions: ExtensionManager,
+    config: KernelConfig
+  ): Promise<void> {
+    const registry = container.getRegistry();
+    const allPlugins = registry.getAll();
+
+    for (const pluginMeta of allPlugins) {
+      if (pluginMeta.proxies && pluginMeta.proxies.length > 0) {
+        for (const proxy of pluginMeta.proxies) {
+          if (proxy.targetPluginId === '*') {
+            for (const dep of pluginMeta.dependencies) {
+              extensions.registerProxy({
+                targetPluginId: dep.pluginId,
+                sourcePluginId: pluginMeta.id,
+                config: proxy.config,
+              });
+            }
+          } else if (proxy.targetPluginId === '**') {
+            for (const targetPlugin of allPlugins) {
+              extensions.registerProxy({
+                targetPluginId: targetPlugin.id,
+                sourcePluginId: pluginMeta.id,
+                config: proxy.config,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    const allPluginInfos: Record<string, import('@/extension').PluginInfo> = {};
+    for (const p of allPlugins) {
+      const pResult = registry.get(p.id);
+      if (pResult.success) {
+        const pInstance = container.getInstance(p.id);
+        if (pInstance.success) {
+          const pPlugin = pResult.data;
+          allPluginInfos[pPlugin.name] = {
+            api: pInstance.data,
+            store: pPlugin.store,
+            metadata: {
+              name: pPlugin.name,
+              version: pPlugin.version,
+              ...(typeof pPlugin.metadata === 'object' && pPlugin.metadata !== null
+                ? pPlugin.metadata
+                : {}),
+            },
+          };
+        }
+      }
+    }
+
+    const proxySourceInfos: Record<string, import('@/extension').ProxySourceInfo> = {};
+    for (const p of allPlugins) {
+      const pResult = registry.get(p.id);
+      if (pResult.success) {
+        proxySourceInfos[p.id] = {
+          store: pResult.data.store,
+        };
+      }
+    }
+
+    const targetsNeedingReapply = new Set<string>();
+
+    for (const pluginMeta of allPlugins) {
+      if (pluginMeta.proxies && pluginMeta.proxies.length > 0) {
+        for (const proxy of pluginMeta.proxies) {
+          if (proxy.targetPluginId === '*') {
+            for (const dep of pluginMeta.dependencies) {
+              targetsNeedingReapply.add(dep.pluginId);
+            }
+          } else if (proxy.targetPluginId === '**') {
+            for (const targetPlugin of allPlugins) {
+              targetsNeedingReapply.add(targetPlugin.name);
+            }
+          }
+        }
+      }
+    }
+
+    for (const targetName of targetsNeedingReapply) {
+      const pluginResult = registry.get(createPluginId(targetName));
+      if (!pluginResult.success) continue;
+
+      const plugin = pluginResult.data;
+
+      const originalInstanceResult = container.getOriginalInstance(targetName);
+      if (!originalInstanceResult.success) continue;
+
+      const originalInstance = originalInstanceResult.data;
+
+      if (
+        typeof originalInstance === 'object' &&
+        originalInstance !== null &&
+        config.extensionsEnabled
+      ) {
+        const newInstance = extensions.applyExtensions(
+          plugin.name,
+          originalInstance as object,
+          plugin.store,
+          {
+            name: plugin.name,
+            version: plugin.version,
+            ...(typeof plugin.metadata === 'object' && plugin.metadata !== null
+              ? plugin.metadata
+              : {}),
+          },
+          allPluginInfos,
+          proxySourceInfos,
+          undefined
+        );
+
+        container.setInstance(plugin.name, newInstance);
+      }
     }
   }
 
