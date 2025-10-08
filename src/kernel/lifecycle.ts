@@ -4,21 +4,14 @@
  * @description Manages ordered initialization and graceful shutdown
  */
 
-import {
-  KernelConfig,
-  KernelContext,
-  PluginState,
-  Result,
-  createPluginId,
-  createKernelId,
-  PluginDependency,
-} from '@/core';
+import { KernelConfig, PluginState, Result, createPluginId } from '@/core';
 import type { PluginContainer } from './container';
 import type { ExtensionManager } from '@/extension';
 import { success, failure } from '@/core';
 import { KernelInitializationError } from '@/errors';
 import { createDependencyResolver } from '@/plugin';
 import type { ProxyMetadata } from '@/extension/proxy-types';
+import { buildPluginsWithMetadata, buildKernelContext } from './lifecycle-context-builder';
 
 export interface LifecycleManager {
   initialize(
@@ -33,50 +26,6 @@ export interface LifecycleManager {
 
 class LifecycleManagerImpl implements LifecycleManager {
   private initializationOrder: string[] = [];
-
-  /**
-   * Builds the plugins object with metadata and store for lifecycle hooks
-   *
-   * Returns plugins with:
-   * - API methods (all plugin methods)
-   * - $meta (name, version, id, custom metadata)
-   * - $store (complete Store object with watch, computed, batch, etc.)
-   */
-  private buildPluginsWithMetadata(
-    container: PluginContainer,
-    pluginDependencies: readonly PluginDependency[]
-  ): Record<string, unknown> {
-    const plugins: Record<string, unknown> = {};
-    const registry = container.getRegistry();
-
-    for (const dep of pluginDependencies) {
-      const depInstance = container.getInstance(dep.pluginId);
-      const depMetadata = registry.get(createPluginId(dep.pluginId));
-
-      if (depInstance.success && depMetadata.success) {
-        const apiData = depInstance.data as Record<string, unknown>;
-        const pluginData = depMetadata.data;
-
-        const customMetadata =
-          typeof pluginData.metadata === 'object' && pluginData.metadata !== null
-            ? pluginData.metadata
-            : {};
-
-        plugins[dep.pluginId] = {
-          ...apiData,
-          $meta: {
-            name: pluginData.name,
-            version: pluginData.version,
-            id: pluginData.id,
-            ...customMetadata,
-          },
-          $store: pluginData.store,
-        };
-      }
-    }
-
-    return plugins;
-  }
 
   async initialize(
     container: PluginContainer,
@@ -370,17 +319,8 @@ class LifecycleManagerImpl implements LifecycleManager {
 
       const plugin = pluginResult.data;
 
-      const kernelContext: KernelContext = {
-        id: createKernelId('kernel'),
-        config,
-        get: <T>(name: string): T => {
-          const result = container.getInstance(name);
-          if (!result.success) throw result.error;
-          return result.data as T;
-        },
-      };
-
-      const pluginsWithMetadata = this.buildPluginsWithMetadata(container, plugin.dependencies);
+      const kernelContext = buildKernelContext(config, container);
+      const pluginsWithMetadata = buildPluginsWithMetadata(container, plugin.dependencies);
 
       const instance = plugin.setupFn({
         plugins: pluginsWithMetadata,
@@ -501,17 +441,8 @@ class LifecycleManagerImpl implements LifecycleManager {
 
       const pluginResult = registry.get(createPluginId(pluginName));
       if (pluginResult.success && pluginResult.data.hooks.onError) {
-        const kernelContext: KernelContext = {
-          id: createKernelId('kernel'),
-          config,
-          get: <T>(name: string): T => {
-            const result = container.getInstance(name);
-            if (!result.success) throw result.error;
-            return result.data as T;
-          },
-        };
-
-        const pluginsWithMetadata = this.buildPluginsWithMetadata(
+        const kernelContext = buildKernelContext(config, container);
+        const pluginsWithMetadata = buildPluginsWithMetadata(
           container,
           pluginResult.data.dependencies
         );
@@ -546,17 +477,8 @@ class LifecycleManagerImpl implements LifecycleManager {
 
         if (pluginResult.success && pluginResult.data.hooks.onShutdown) {
           try {
-            const kernelContext: KernelContext = {
-              id: createKernelId('kernel'),
-              config: config || {},
-              get: <T>(name: string): T => {
-                const result = container.getInstance(name);
-                if (!result.success) throw result.error;
-                return result.data as T;
-              },
-            };
-
-            const pluginsWithMetadata = this.buildPluginsWithMetadata(
+            const kernelContext = buildKernelContext(config || {}, container);
+            const pluginsWithMetadata = buildPluginsWithMetadata(
               container,
               pluginResult.data.dependencies
             );

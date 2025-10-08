@@ -17,6 +17,16 @@ import type {
 // CIRCULAR BUFFER (O(1) operations)
 // ============================================================================
 
+/**
+ * Circular buffer implementation with O(1) operations
+ *
+ * **Thread Safety Note:**
+ * This implementation is NOT thread-safe. In JavaScript's single-threaded
+ * environment this is fine, but if used in Workers or multi-threaded contexts,
+ * you must add synchronization mechanisms (locks, mutexes, etc.).
+ *
+ * For Worker-safe implementation, consider using SharedArrayBuffer with Atomics.
+ */
 class CircularBuffer<T> {
   private buffer: T[];
   private head = 0;
@@ -24,6 +34,9 @@ class CircularBuffer<T> {
   private size = 0;
 
   constructor(private capacity: number) {
+    if (capacity < 1) {
+      throw new Error('CircularBuffer capacity must be at least 1');
+    }
     this.buffer = new Array(capacity);
   }
 
@@ -76,6 +89,7 @@ interface StoreState<TStore> {
 
   inBatch: boolean;
   batchChanges: StoreChange[];
+  pendingNotifications: Promise<void>; // For sequential async notifications
   history: CircularBuffer<StoreChange>;
   historyEnabled: boolean;
   computed: Map<symbol, ComputedState>;
@@ -90,7 +104,9 @@ interface StoreState<TStore> {
   };
 }
 
-const stateMap = new WeakMap<any, StoreState<any>>();
+// Symbol for storing internal state directly on the store object
+// This avoids WeakMap lookups and provides better type safety
+const STORE_STATE_SYMBOL = Symbol('@@StoreState');
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -98,18 +114,34 @@ const stateMap = new WeakMap<any, StoreState<any>>();
 
 /**
  * Get or create internal state for a store
+ * Uses a Symbol to store state directly on the store object
+ * This is more efficient than WeakMap and provides better type safety
  */
 function getState<TStore>(store: any): StoreState<TStore> {
-  if (!stateMap.has(store)) {
+  if (!(STORE_STATE_SYMBOL in store)) {
     const options = (store as any).__options__ || {};
 
-    stateMap.set(store, {
+    // Validate options
+    if (options.maxWatchers !== undefined && options.maxWatchers < 1) {
+      throw new Error(`Invalid maxWatchers value: ${options.maxWatchers}. Must be at least 1.`);
+    }
+    if (options.maxWatchersPerKey !== undefined && options.maxWatchersPerKey < 1) {
+      throw new Error(
+        `Invalid maxWatchersPerKey value: ${options.maxWatchersPerKey}. Must be at least 1.`
+      );
+    }
+    if (options.maxHistory !== undefined && options.maxHistory < 1) {
+      throw new Error(`Invalid maxHistory value: ${options.maxHistory}. Must be at least 1.`);
+    }
+
+    store[STORE_STATE_SYMBOL] = {
       watchersByKey: new Map(),
       allWatchers: new Set(),
       batchWatchers: new Set(),
       computedWatchers: new Map(),
       inBatch: false,
       batchChanges: [],
+      pendingNotifications: Promise.resolve(), // For sequential notifications
       history: new CircularBuffer(options.maxHistory ?? 50),
       historyEnabled: options.history ?? false,
       computed: new Map(),
@@ -130,9 +162,9 @@ function getState<TStore>(store: any): StoreState<TStore> {
         peakWatchers: 0,
         notificationTimes: [],
       },
-    });
+    };
   }
-  return stateMap.get(store)!;
+  return store[STORE_STATE_SYMBOL];
 }
 
 /**
@@ -303,58 +335,68 @@ function now(): number {
 
 /**
  * Notify watchers about a change (optimized with indexing)
+ *
+ * This function chains notifications sequentially to prevent race conditions.
+ * Each notification waits for the previous one to complete before starting.
  */
 async function notifyChange(store: any, change: StoreChange): Promise<void> {
   const state = getState(store);
-  const startTime = state.options.enableMetrics ? now() : 0;
 
   if (state.inBatch) {
     state.batchChanges.push(change);
     return;
   }
 
-  if (state.historyEnabled) {
-    state.history.push(change);
-  }
+  // Chain this notification after any pending ones to prevent race conditions
+  state.pendingNotifications = state.pendingNotifications.then(async () => {
+    const startTime = state.options.enableMetrics ? now() : 0;
 
-  if (state.options.enableMetrics) {
-    state.metrics.totalChanges++;
-  }
-
-  for (const [, computed] of state.computed) {
-    if (computed.dependencies.has(change.key)) {
-      computed.dirty = true;
+    if (state.historyEnabled) {
+      state.history.push(change);
     }
-  }
 
-  const promises: Promise<void>[] = [];
+    if (state.options.enableMetrics) {
+      state.metrics.totalChanges++;
+    }
 
-  const keyWatchers = state.watchersByKey.get(change.key);
-  if (keyWatchers) {
-    for (const watcher of keyWatchers) {
-      const result = (watcher.callback as WatchCallback)(change);
+    for (const [, computed] of state.computed) {
+      if (computed.dependencies.has(change.key)) {
+        computed.dirty = true;
+      }
+    }
+
+    const promises: Promise<void>[] = [];
+
+    const keyWatchers = state.watchersByKey.get(change.key);
+    if (keyWatchers) {
+      for (const watcher of keyWatchers) {
+        const result = (watcher.callback as WatchCallback)(change);
+        if (result instanceof Promise) {
+          promises.push(result);
+        }
+      }
+    }
+
+    for (const watcher of state.allWatchers) {
+      const result = (watcher.callback as WatchAllCallback)(change);
       if (result instanceof Promise) {
         promises.push(result);
       }
     }
-  }
 
-  for (const watcher of state.allWatchers) {
-    const result = (watcher.callback as WatchAllCallback)(change);
-    if (result instanceof Promise) {
-      promises.push(result);
+    await Promise.all(promises);
+
+    if (state.options.enableMetrics) {
+      const duration = now() - startTime;
+      state.metrics.notificationTimes.push(duration);
+      if (state.metrics.notificationTimes.length > 100) {
+        state.metrics.notificationTimes.shift();
+      }
     }
-  }
+  });
 
-  await Promise.all(promises);
-
-  if (state.options.enableMetrics) {
-    const duration = now() - startTime;
-    state.metrics.notificationTimes.push(duration);
-    if (state.metrics.notificationTimes.length > 100) {
-      state.metrics.notificationTimes.shift();
-    }
-  }
+  // Wait for this notification to complete
+  await state.pendingNotifications;
 }
 
 /**

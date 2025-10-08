@@ -4,7 +4,8 @@
  * @description Manages lifecycle of instances
  */
 
-import type { PluginId, Result } from '@/core';
+import type { Result } from '@/core';
+import { createPluginId } from '@/core';
 import type { BuiltPlugin, PluginRegistry } from '@/plugin';
 import { success, failure } from '@/core';
 import { PluginNotFoundError, PluginLoadError } from '@/errors';
@@ -96,7 +97,7 @@ class PluginContainerImpl implements PluginContainer {
       );
     }
 
-    const pluginResult = this.registry.get(pluginName as PluginId);
+    const pluginResult = this.registry.get(createPluginId(pluginName));
     if (!pluginResult.success) {
       return failure(pluginResult.error);
     }
@@ -117,7 +118,7 @@ class PluginContainerImpl implements PluginContainer {
   }
 
   setInstance<TApi>(pluginName: string, instance: TApi): Result<void, PluginNotFoundError> {
-    const pluginResult = this.registry.get(pluginName as PluginId);
+    const pluginResult = this.registry.get(createPluginId(pluginName));
     if (!pluginResult.success) {
       return failure(pluginResult.error);
     }

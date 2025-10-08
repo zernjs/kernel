@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * @file Extension system for modified plugin APIs
  * @description Allows plugins to extend other plugins' APIs and intercept methods via proxies
@@ -7,7 +6,8 @@
 import type { PluginId, PluginExtension } from '@/core';
 import { createPluginId } from '@/core';
 import type { ProxyMetadata, CompiledMethodProxy } from './proxy-types';
-import { shouldProxyMethod, enhanceContext } from './proxy-types';
+import { compileProxies } from './proxy-compiler';
+import { createProxyContext } from './proxy-context-helper';
 
 export interface RuntimeErrorHandler {
   (error: Error, context: { pluginName: string; method: string }): Promise<void> | void;
@@ -55,7 +55,10 @@ class ExtensionManagerImpl implements ExtensionManager {
   }
 
   registerProxy(proxy: ProxyMetadata): void {
-    const targetName = proxy.targetPluginId as PluginId;
+    const targetName =
+      typeof proxy.targetPluginId === 'string'
+        ? createPluginId(proxy.targetPluginId)
+        : proxy.targetPluginId;
     const existing = this.proxies.get(targetName) ?? [];
     this.proxies.set(targetName, [...existing, proxy]);
   }
@@ -135,7 +138,7 @@ class ExtensionManagerImpl implements ExtensionManager {
     onRuntimeError?: RuntimeErrorHandler
   ): TApi {
     const proxiedApi = { ...api } as Record<string, unknown>;
-    const compiledProxies = this.compileProxies(api, proxies);
+    const compiledProxies = compileProxies(api, proxies);
     const proxiesByMethod = new Map<string, CompiledMethodProxy[]>();
 
     for (const proxy of compiledProxies) {
@@ -167,45 +170,6 @@ class ExtensionManagerImpl implements ExtensionManager {
     return proxiedApi as TApi;
   }
 
-  private compileProxies<TApi extends object>(
-    api: TApi,
-    proxies: readonly ProxyMetadata[]
-  ): CompiledMethodProxy[] {
-    const compiled: CompiledMethodProxy[] = [];
-
-    for (const proxyMeta of proxies) {
-      const config = proxyMeta.config;
-
-      const allMethodNames = Object.keys(api).filter(
-        key => typeof (api as any)[key] === 'function'
-      );
-
-      const targetMethods = allMethodNames.filter(methodName =>
-        shouldProxyMethod(methodName, {
-          include: config.include,
-          exclude: config.exclude,
-        })
-      );
-
-      for (const methodName of targetMethods) {
-        compiled.push({
-          targetPluginId: proxyMeta.targetPluginId as PluginId,
-          sourcePluginId: proxyMeta.sourcePluginId,
-          methodName,
-          before: config.before,
-          after: config.after,
-          onError: config.onError,
-          around: config.around,
-          priority: config.priority ?? 50,
-          condition: config.condition,
-          group: config.group,
-        });
-      }
-    }
-
-    return compiled;
-  }
-
   private createProxiedMethod(
     pluginName: string,
     methodName: string,
@@ -223,17 +187,15 @@ class ExtensionManagerImpl implements ExtensionManager {
 
       try {
         for (const proxy of proxies) {
-          const proxyStore = proxy.sourcePluginId
-            ? (proxySourceInfos[proxy.sourcePluginId]?.store ?? {})
-            : store;
-
-          const ctx = enhanceContext({
+          const ctx = createProxyContext(
             pluginName,
+            methodName,
+            currentArgs,
             plugins,
-            method: methodName,
-            args: currentArgs,
-            store: proxyStore,
-          } as any);
+            proxy.sourcePluginId,
+            store,
+            proxySourceInfos
+          );
 
           if (proxy.condition && !proxy.condition(ctx)) {
             continue;
@@ -262,17 +224,15 @@ class ExtensionManagerImpl implements ExtensionManager {
           const aroundProxy = proxies.find(p => p.around);
 
           if (aroundProxy) {
-            const proxyStore = aroundProxy.sourcePluginId
-              ? (proxySourceInfos[aroundProxy.sourcePluginId]?.store ?? {})
-              : store;
-
-            const ctx = enhanceContext({
+            const ctx = createProxyContext(
               pluginName,
+              methodName,
+              currentArgs,
               plugins,
-              method: methodName,
-              args: currentArgs,
-              store: proxyStore,
-            } as any);
+              aroundProxy.sourcePluginId,
+              store,
+              proxySourceInfos
+            );
 
             result = await aroundProxy.around!(ctx, async () => {
               return await originalMethod(...currentArgs);
@@ -283,17 +243,15 @@ class ExtensionManagerImpl implements ExtensionManager {
         }
 
         for (const proxy of proxies) {
-          const proxyStore = proxy.sourcePluginId
-            ? (proxySourceInfos[proxy.sourcePluginId]?.store ?? {})
-            : store;
-
-          const ctx = enhanceContext({
+          const ctx = createProxyContext(
             pluginName,
+            methodName,
+            currentArgs,
             plugins,
-            method: methodName,
-            args: currentArgs,
-            store: proxyStore,
-          } as any);
+            proxy.sourcePluginId,
+            store,
+            proxySourceInfos
+          );
 
           if (proxy.condition && !proxy.condition(ctx)) {
             continue;
@@ -307,17 +265,15 @@ class ExtensionManagerImpl implements ExtensionManager {
         return result;
       } catch (error) {
         for (const proxy of proxies) {
-          const proxyStore = proxy.sourcePluginId
-            ? (proxySourceInfos[proxy.sourcePluginId]?.store ?? {})
-            : store;
-
-          const ctx = enhanceContext({
+          const ctx = createProxyContext(
             pluginName,
+            methodName,
+            currentArgs,
             plugins,
-            method: methodName,
-            args: currentArgs,
-            store: proxyStore,
-          } as any);
+            proxy.sourcePluginId,
+            store,
+            proxySourceInfos
+          );
 
           if (proxy.condition && !proxy.condition(ctx)) {
             continue;
