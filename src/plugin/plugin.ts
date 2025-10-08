@@ -208,6 +208,24 @@ export interface PluginBuilder<
    * @param fn - Function that receives the target API and returns extension methods
    * @returns Plugin builder with updated extension map
    *
+   * @remarks
+   * **About the `api` parameter:**
+   *
+   * At runtime, the `api` parameter includes:
+   * - The target plugin's original API
+   * - All extensions that other plugins have applied to it
+   *
+   * However, TypeScript cannot statically infer extensions from other plugins due to
+   * the complexity of accumulated type intersections. Therefore, the `api` parameter
+   * is typed as `TTargetApi & Record<string, any>` to allow accessing extension methods.
+   *
+   * **This means:**
+   * - ✅ Your code will work correctly at runtime
+   * - ⚠️ TypeScript won't provide autocomplete for extension methods from dependencies
+   * - ⚠️ You won't get compile-time errors if you mistype extension method names
+   *
+   * Use with care and ensure your dependencies are correctly declared.
+   *
    * @example
    * ```typescript
    * const advancedMathPlugin = plugin('advancedMath', '1.0.0')
@@ -218,7 +236,16 @@ export interface PluginBuilder<
    *   }))
    *   .setup(() => ({}));
    *
-   * // Later: math.power(2, 3) is available
+   * // You can extend mathPlugin again, using advancedMath's extensions:
+   * const moreExtensions = plugin('more', '1.0.0')
+   *   .depends(mathPlugin, '^1.0.0')
+   *   .depends(advancedMathPlugin, '^1.0.0')
+   *   .extend(mathPlugin, api => ({
+   *     // api.sqrt exists at runtime (from advancedMathPlugin)
+   *     // but TypeScript can't infer it
+   *     sqrt2: (x: number) => api.sqrt(x)
+   *   }))
+   *   .setup(() => ({}));
    * ```
    */
   extend<
@@ -230,7 +257,7 @@ export interface PluginBuilder<
     TExt extends object = object,
   >(
     target: BuiltPlugin<TTargetName, TTargetApi, TTargetExtMap, TTargetMetadata, TTargetStore>,
-    fn: (api: TTargetApi) => TExt
+    fn: (api: TTargetApi & Record<string, any>) => TExt
   ): PluginBuilder<TName, TApi, TDeps, TExtMap & Record<TTargetName, TExt>, TMetadata, TStore>;
 
   /**
@@ -507,7 +534,7 @@ class PluginBuilderImpl<
     config: { errors?: import('@/errors').ErrorConfig } & Record<string, unknown>
   ): PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore> {
     this.pluginConfig = { ...this.pluginConfig, ...config };
-    return this;
+    return this as unknown as PluginBuilder<TName, TApi, TDeps, TExtMap, TMetadata, TStore>;
   }
 
   metadata<TNewMetadata extends Record<string, unknown>>(
@@ -529,7 +556,7 @@ class PluginBuilderImpl<
   ): PluginBuilder<
     TName,
     TApi,
-    TDeps & Record<TDepName, TDepApi & { __meta__?: TDepMetadata }>,
+    TDeps & Record<TDepName, TDepApi & { __meta__?: TDepMetadata; __store__?: TDepStore }>,
     TExtMap,
     TMetadata,
     TStore
@@ -542,7 +569,7 @@ class PluginBuilderImpl<
     return this as unknown as PluginBuilder<
       TName,
       TApi,
-      TDeps & Record<TDepName, TDepApi & { __meta__?: TDepMetadata }>,
+      TDeps & Record<TDepName, TDepApi & { __meta__?: TDepMetadata; __store__?: TDepStore }>,
       TExtMap,
       TMetadata,
       TStore
@@ -558,7 +585,7 @@ class PluginBuilderImpl<
     TExt extends object = object,
   >(
     target: BuiltPlugin<TTargetName, TTargetApi, TTargetExtMap, TTargetMetadata, TTargetStore>,
-    fn: (api: TTargetApi) => TExt
+    fn: (api: TTargetApi & Record<string, any>) => TExt
   ): PluginBuilder<TName, TApi, TDeps, TExtMap & Record<TTargetName, TExt>, TMetadata, TStore> {
     this.extensions.push({
       targetPluginId: target.id,
