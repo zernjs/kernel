@@ -20,11 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/init@v4
         with: { languages: javascript }
       - uses: actions/setup-node@v5
         with: { node-version: '22' }
       - uses: pnpm/action-setup@v4
         with: { version: 9 }
       - run: corepack enable && pnpm install --frozen-lockfile
-      - uses: github/codeql-action/analyze@v3
+      - uses: github/codeql-action/analyze@v4
