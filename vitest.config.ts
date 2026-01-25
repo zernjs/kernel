@@ -16,14 +16,8 @@ export default defineConfig({
         '**/*.config.*',
         '**/index.ts',
       ],
-      thresholds: {
-        statements: 0, // TODO: adjust to ~60
-        branches: 0, // TODO: adjust to ~60
-        functions: 0, // TODO: adjust to ~60
-        lines: 0, // TODO: adjust to ~60
-      },
     },
-    include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
     exclude: ['node_modules', 'dist'],
     testTimeout: 10000,
     hookTimeout: 10000,
@@ -31,14 +25,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
-      '@core': resolve(__dirname, './src/core'),
-      '@extension': resolve(__dirname, './src/extension'),
-      '@kernel': resolve(__dirname, './src/kernel'),
-      '@plugin': resolve(__dirname, './src/plugin'),
-      '@utils': resolve(__dirname, './src/utils'),
     },
   },
-  plugins: [],
   esbuild: {
     target: 'es2022',
   },
