@@ -33,7 +33,7 @@ const loggerPlugin = definePlugin({
   setup: ctx => {
     // Cast explícito ou type guard seria ideal, mas para o exemplo vamos confiar na estrutura
     // O problema é que ctx.plugins.config é uma união de tipos da API
-    const config = ctx.plugins.config as { logLevel: string };
+    const config = ctx.plugins.config;
     const level = config.logLevel;
 
     return {
@@ -50,8 +50,8 @@ const dbPlugin = definePlugin({
   dependencies: [configPlugin, loggerPlugin],
   setup: async ctx => {
     // Cast para ajudar o TS a desambiguar as APIs no contexto
-    const logger = ctx.plugins.logger as { info: (msg: string) => void };
-    const config = ctx.plugins.config as { dbUrl: string };
+    const logger = ctx.plugins.logger;
+    const config = ctx.plugins.config;
 
     logger.info(`Conectando ao DB em ${config.dbUrl}...`);
 
@@ -102,8 +102,8 @@ const auditPlugin = definePlugin({
     // mas adicionamos um método auxiliar que os devs podem usar.
     // *Nota: Em versões futuras, poderíamos suportar wrapping de métodos existentes via middleware.*
 
-    const logger = ctx.plugins.logger as { info: (msg: string) => void };
-    const db = ctx.plugins.db as { save: (t: string, d: any) => void };
+    const logger = ctx.plugins.logger;
+    const db = ctx.plugins.db;
 
     return {
       api: {}, // Sem API própria

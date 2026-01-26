@@ -5,6 +5,7 @@ describe('Zern Kernel v2', () => {
   it('should initialize simple plugins correctly', async () => {
     const p1 = definePlugin({
       name: 'math',
+      version: '1.0.0',
       setup: () => ({
         add: (a: number, b: number) => a + b,
       }),
@@ -20,6 +21,7 @@ describe('Zern Kernel v2', () => {
     // 1. Base Plugin
     const db = definePlugin({
       name: 'db',
+      version: '1.0.0',
       setup: () => ({
         data: [] as string[],
         add: (item: string) => {
@@ -31,6 +33,7 @@ describe('Zern Kernel v2', () => {
     // 2. Extending Plugin
     const auth = definePlugin({
       name: 'auth',
+      version: '1.0.0',
       dependencies: [db],
       setup: ctx => {
         // Runtime verification: Dependency should be available
@@ -69,7 +72,7 @@ describe('Zern Kernel v2', () => {
 
   it('should resolve circular dependencies order or throw', async () => {
     // Note: Our simple topo sort throws on circular deps
-    const p1 = definePlugin({ name: 'p1', dependencies: [], setup: () => ({}) });
+    const p1 = definePlugin({ name: 'p1', version: '1.0.0', dependencies: [], setup: () => ({}) });
     // Fake circular structure for test
     (p1 as any).dependencies = [{ name: 'p1' }];
 
