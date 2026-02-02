@@ -5,6 +5,8 @@
 import { KernelBuilder } from './kernel';
 import type { LifecycleManager } from './lifecycle';
 
+export * from './security/types';
+
 /**
  * Base type for any hook map.
  * Keys are hook names, values are hook functions.

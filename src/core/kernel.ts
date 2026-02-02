@@ -17,6 +17,10 @@ import {
 import { LifecycleManager } from './lifecycle';
 import { CoreDependencyResolverPlugin } from '../plugins/dependency-resolver';
 import { CoreMiddlewarePlugin } from '../plugins/middleware';
+import { SecurityManager } from './security/manager';
+import { PluginSandbox } from './security/sandbox';
+import { PluginManifest, SecurityMode } from './security/types';
+import * as fs from 'fs';
 
 /**
  * Kernel Builder Class.
@@ -26,8 +30,12 @@ import { CoreMiddlewarePlugin } from '../plugins/middleware';
 export class KernelBuilder<Context = {}, Hooks extends HookMap = KernelHooks> {
   private plugins: PluginDefinition<any, any, any, any>[] = [];
   public hooks = new LifecycleManager<any>(); // Type cast to any to allow internal flexibility, but exposed types are strict
+  public security: SecurityManager;
+  private sandbox: PluginSandbox;
 
-  constructor() {
+  constructor(securityMode: SecurityMode = 'strict') {
+    this.security = new SecurityManager(securityMode);
+    this.sandbox = new PluginSandbox(this.security);
     this.hooks.emitSync('onInit', this);
   }
 
@@ -48,6 +56,59 @@ export class KernelBuilder<Context = {}, Hooks extends HookMap = KernelHooks> {
    */
   public setPlugins(plugins: PluginDefinition<any, any, any, any>[]) {
     this.plugins = plugins;
+  }
+
+  /**
+   * Loads a plugin securely from the filesystem using the Sandbox.
+   * This ensures that the plugin runs in an isolated environment and permissions are enforced.
+   *
+   * @param pluginPath - Absolute path to the plugin entry file.
+   * @param manifest - The security manifest for the plugin.
+   */
+  public loadSecurePlugin(pluginPath: string, manifest: PluginManifest) {
+    if (!fs.existsSync(pluginPath)) {
+      throw new Error(`Plugin file not found: ${pluginPath}`);
+    }
+
+    // Load plugin in sandbox
+    const exports = this.sandbox.load(pluginPath, manifest);
+
+    // Identify the PluginDefinition in the exports
+    // It could be the default export or a named export
+    let pluginDef: PluginDefinition<any, any, any, any> | undefined;
+
+    if (this.isPluginDefinition(exports)) {
+      pluginDef = exports;
+    } else if (exports.default && this.isPluginDefinition(exports.default)) {
+      pluginDef = exports.default;
+    } else {
+      // Search for any export that looks like a plugin
+      const values = Object.values(exports);
+      for (const val of values) {
+        if (this.isPluginDefinition(val)) {
+          pluginDef = val;
+          break;
+        }
+      }
+    }
+
+    if (!pluginDef) {
+      throw new Error(`Could not find a valid PluginDefinition export in ${pluginPath}`);
+    }
+
+    // Enforce name match
+    if (pluginDef.name !== manifest.name) {
+      throw new Error(
+        `Plugin name mismatch. Manifest: ${manifest.name}, Plugin: ${pluginDef.name}`
+      );
+    }
+
+    this.use(pluginDef);
+    return this;
+  }
+
+  private isPluginDefinition(obj: any): obj is PluginDefinition<any, any, any, any> {
+    return obj && typeof obj === 'object' && 'name' in obj && 'setup' in obj && 'version' in obj;
   }
 
   /**
